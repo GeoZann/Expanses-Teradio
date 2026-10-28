@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14246b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Τετράδιο">
+<title>Τετράδιο εξόδων</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Commissioner:wght@400;600;800&family=Literata:opsz,wght@7..72,500;7..72,800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e6ecf3;--card:#f6f9fc;--ink:#14246b;--mut:#5d6a94;--line:#b9c6dd;--acc:#d6336c;--pos:#13806a;color-scheme:light;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1033;--card:#121a47;--ink:#dce5ff;--mut:#8d9bd0;--line:#2a3677;--acc:#ff6fa5;--pos:#4fd1b0;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0b1033;--card:#121a47;--ink:#dce5ff;--mut:#8d9bd0;--line:#2a3677;--acc:#ff6fa5;--pos:#4fd1b0;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 Commissioner,"Segoe UI",sans-serif;
+background-image:repeating-linear-gradient(0deg,transparent 0 31px,color-mix(in srgb,var(--line) 45%,transparent) 31px 32px)}
+main{max-width:560px;margin:0 auto;padding:16px 16px 48px}
+.num,h1,h2{font-family:Literata,Georgia,serif}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+h1{font-size:1.3rem;margin:0;font-weight:800}
+.mn{display:flex;align-items:center;gap:6px}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer;border:1.5px solid var(--ink);background:transparent;border-radius:6px;padding:6px 12px;font-weight:600}
+button:hover{background:var(--ink);color:var(--bg)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.mn span{min-width:130px;text-align:center;font-weight:600;text-transform:capitalize}
+.hero{background:var(--card);border:1.5px solid var(--ink);border-radius:4px;padding:18px 16px;margin-bottom:14px}
+.hero small{color:var(--mut)}
+.bal{font-size:2.6rem;font-weight:800;line-height:1.1;margin:2px 0 12px}
+.row2{display:flex;gap:20px}
+.row2 b{display:block;font-size:1.15rem}
+.pos{color:var(--pos)}.neg{color:var(--acc)}
+nav{display:flex;border-bottom:1.5px solid var(--ink);margin-bottom:14px}
+nav button{flex:1;border:0;border-radius:0;padding:10px 4px}
+nav button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+section{background:var(--card);border:1.5px solid var(--line);border-radius:4px;padding:14px;margin-bottom:14px}
+h2{font-size:1.05rem;margin:0 0 10px}
+.bar{height:10px;background:var(--line);border-radius:5px;overflow:hidden;margin:4px 0 10px}
+.bar i{display:block;height:100%}
+.lbl{display:flex;justify-content:space-between;gap:8px;font-size:.92rem}
+form{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+form .w{grid-column:1/-1}
+input,select{width:100%;padding:9px;border:1.5px solid var(--line);border-radius:6px;background:var(--bg)}
+.tx{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px dashed var(--line)}
+.tx small{color:var(--mut);display:block}
+.tx button{padding:2px 8px;border-color:var(--line);color:var(--mut)}
+.empty{color:var(--mut);text-align:center;padding:12px 0}
+.bud{display:grid;grid-template-columns:1fr 110px;gap:8px;align-items:end;margin-bottom:6px}
+svg{width:100%;height:auto;display:block}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>Τετράδιο εξόδων</h1>
+<div class="mn"><button id="pv" aria-label="Προηγούμενος μήνας">‹</button><span id="mt"></span><button id="nx" aria-label="Επόμενος μήνας">›</button></div>
+</header>
+<div class="hero">
+<small>Υπόλοιπο μήνα</small>
+<div class="bal num" id="bal"></div>
+<div class="row2"><div><small>Έσοδα</small><b class="pos num" id="inc"></b></div><div><small>Έξοδα</small><b class="neg num" id="exp"></b></div></div>
+</div>
+<nav role="tablist">
+<button role="tab" data-t="s" aria-selected="true">Σύνοψη</button>
+<button role="tab" data-t="k" aria-selected="false">Κινήσεις</button>
+<button role="tab" data-t="b" aria-selected="false">Budget</button>
+</nav>
+<div id="v"></div>
+</main>
+<script>
+var EXP=["Σούπερ μάρκετ","Στέγαση","Λογαριασμοί","Μεταφορές","Φαγητό έξω","Υγεία","Διασκέδαση","Αγορές","Άλλα έξοδα"];
+var INC=["Μισθός","Άλλα έσοδα"];
+var COL=["#d6336c","#e8a317","#13806a","#2f6fd0","#8a4fc0","#c8643c","#3aa0a8","#7a8a2a","#8d96b8"];
+var S={tx:[],bud:{}};
+try{var r=localStorage.getItem("tetradio1");if(r)S=JSON.parse(r)}catch(e){}
+function save(){try{localStorage.setItem("tetradio1",JSON.stringify(S))}catch(e){}}
+var d0=new Date(),m=d0.getFullYear()+"-"+String(d0.getMonth()+1).padStart(2,"0"),tab="s";
+function eur(n){return n.toLocaleString("el-GR",{style:"currency",currency:"EUR"})}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function shift(k){var p=m.split("-"),x=new Date(+p[0],+p[1]-1+k,1);m=x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0");render()}
+function data(){
+var L=S.tx.filter(function(t){return t.d.indexOf(m)===0}).sort(function(a,b){return a.d<b.d?1:-1});
+var inc=0,exp=0,by={};
+L.forEach(function(t){if(t.k==="i")inc+=t.a;else{exp+=t.a;by[t.c]=(by[t.c]||0)+t.a}});
+return{L:L,inc:inc,exp:exp,by:by}
+}
+function summary(D){
+if(!D.L.length)return'<section><div class="empty">Δεν υπάρχουν κινήσεις αυτόν τον μήνα. Πρόσθεσε την πρώτη από την καρτέλα «Κινήσεις».</div></section>';
+var p=m.split("-"),n=new Date(+p[0],+p[1],0).getDate(),days=[];
+for(var i=0;i<n;i++)days.push(0);
+D.L.forEach(function(t){if(t.k==="e")days[+t.d.slice(8,10)-1]+=t.a});
+var mx=Math.max.apply(null,days)||1,bars="";
+days.forEach(function(v,i){var h=v/mx*70;bars+='<rect x="'+(i*(300/n)+1)+'" y="'+(80-h)+'" width="'+(300/n-2)+'" height="'+Math.max(h,v?2:0)+'" fill="var(--ink)" rx="1"><title>'+(i+1)+": "+eur(v)+"</title></rect>"});
+var h='<section><h2>Έξοδα ανά ημέρα</h2><svg viewBox="0 0 300 92" role="img" aria-label="Έξοδα ανά ημέρα">'+bars+'<line x1="0" x2="300" y1="80.5" y2="80.5" stroke="var(--line)"/><text x="0" y="91" font-size="8" fill="var(--mut)">1</text><text x="300" y="91" font-size="8" text-anchor="end" fill="var(--mut)">'+n+"</text></svg></section>";
+var cs=Object.keys(D.by).sort(function(a,b){return D.by[b]-D.by[a]});
+h+="<section><h2>Έξοδα ανά κατηγορία</h2>";
+if(!cs.length)h+='<div class="empty">Δεν υπάρχουν έξοδα.</div>';
+cs.forEach(function(c){var v=D.by[c],pc=v/D.exp*100,col=COL[EXP.indexOf(c)%COL.length]||COL[8];
+h+='<div class="lbl"><span>'+esc(c)+'</span><b class="num">'+eur(v)+" ("+Math.round(pc)+"%)</b></div><div class=\"bar\"><i style=\"width:"+pc+"%;background:"+col+'"></i></div>'});
+return h+"</section>"
+}
+function list(D){
+var h='<section><h2>Νέα κίνηση</h2><form id="f"><select id="fk" class="w"><option value="e">Έξοδο</option><option value="i">Έσοδο</option></select>'+
+'<input id="fa" type="number" step="0.01" min="0" placeholder="Ποσό €" inputmode="decimal" aria-label="Ποσό">'+
+'<input id="fd" type="date" aria-label="Ημερομηνία"><select id="fc" class="w" aria-label="Κατηγορία"></select>'+
+'<input id="fn" class="w" placeholder="Σημείωση (προαιρετικά)" aria-label="Σημείωση"><button type="button" id="add" class="w">Αποθήκευση κίνησης</button></form></section>';
+h+="<section><h2>Κινήσεις μήνα</h2>";
+if(!D.L.length)h+='<div class="empty">Καμία κίνηση ακόμα.</div>';
+D.L.forEach(function(t){h+='<div class="tx"><div>'+esc(t.c)+"<small>"+t.d.split("-").reverse().join("/")+(t.n?" · "+esc(t.n):"")+'</small></div><div><b class="num '+(t.k==="i"?"pos":"neg")+'">'+(t.k==="i"?"+":"−")+eur(t.a)+'</b> <button data-del="'+t.id+'" aria-label="Διαγραφή">×</button></div></div>'});
+return h+"</section>"
+}
+function budget(D){
+var h='<section><h2>Μηνιαίο budget ανά κατηγορία</h2>';
+EXP.forEach(function(c){var b=S.bud[c]||0,v=D.by[c]||0,pc=b?Math.min(v/b*100,100):0,over=b&&v>b;
+h+='<div class="bud"><div><div class="lbl"><span>'+esc(c)+'</span><span class="num '+(over?"neg":"")+'">'+eur(v)+(b?" / "+eur(b):"")+'</span></div><div class="bar"><i style="width:'+pc+"%;background:"+(over?"var(--acc)":"var(--pos)")+'"></i></div></div><input type="number" min="0" step="10" data-b="'+esc(c)+'" value="'+(b||"")+'" placeholder="Budget €" aria-label="Budget '+esc(c)+'"></div>'});
+return h+'<small style="color:var(--mut)">Το budget ισχύει για κάθε μήνα. Με κόκκινο φαίνονται οι κατηγορίες που το ξεπέρασαν.</small></section>'
+}
+function render(){
+var D=data(),p=m.split("-");
+document.getElementById("mt").textContent=new Date(+p[0],+p[1]-1,1).toLocaleDateString("el-GR",{month:"long",year:"numeric"});
+var b=D.inc-D.exp,be=document.getElementById("bal");
+be.textContent=eur(b);be.className="bal num "+(b<0?"neg":"");
+document.getElementById("inc").textContent=eur(D.inc);document.getElementById("exp").textContent=eur(D.exp);
+document.querySelectorAll("nav button").forEach(function(x){x.setAttribute("aria-selected",x.dataset.t===tab)});
+var v=document.getElementById("v");
+v.innerHTML=tab==="s"?summary(D):tab==="k"?list(D):budget(D);
+if(tab==="k"){
+var fk=document.getElementById("fk"),fc=document.getElementById("fc"),fd=document.getElementById("fd");
+var td=new Date();var tm=td.getFullYear()+"-"+String(td.getMonth()+1).padStart(2,"0");fd.value=m===tm?tm+"-"+String(td.getDate()).padStart(2,"0"):m+"-01";
+function cats(){fc.innerHTML=(fk.value==="e"?EXP:INC).map(function(c){return"<option>"+esc(c)+"</option>"}).join("")}
+cats();fk.onchange=cats;
+document.getElementById("add").onclick=function(){
+var a=parseFloat(document.getElementById("fa").value);
+if(!(a>0)||!fd.value){document.getElementById("fa").focus();return}
+S.tx.push({id:Date.now()+""+Math.floor(Math.random()*999),k:fk.value,a:a,c:fc.value,d:fd.value,n:document.getElementById("fn").value.trim()});
+save();m=fd.value.slice(0,7);render()};
+v.querySelectorAll("[data-del]").forEach(function(x){x.onclick=function(){S.tx=S.tx.filter(function(t){return t.id!==x.dataset.del});save();render()}})
+}
+if(tab==="b")v.querySelectorAll("[data-b]").forEach(function(x){x.onchange=function(){var n=parseFloat(x.value);if(n>0)S.bud[x.dataset.b]=n;else delete S.bud[x.dataset.b];save();render()}})
+}
+document.getElementById("pv").onclick=function(){shift(-1)};
+document.getElementById("nx").onclick=function(){shift(1)};
+document.querySelectorAll("nav button").forEach(function(x){x.onclick=function(){tab=x.dataset.t;render()}});
+render();
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
+</script>
+</body>
+</html>
