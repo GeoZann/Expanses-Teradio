@@ -13,11 +13,17 @@ return new Promise(function(ok,no){var s=document.createElement("script");s.src=
 s.onerror=function(){no(new Error("Δεν φόρτωσε ο αναγνώστης Excel. Χρειάζεται σύνδεση στο ίντερνετ την πρώτη φορά."))};document.head.appendChild(s)})
 }
 function decode(buf){
+var b=new Uint8Array(buf.slice(0,2));
+if(b[0]===0xFF&&b[1]===0xFE)return new TextDecoder("utf-16le").decode(buf);
+if(b[0]===0xFE&&b[1]===0xFF)return new TextDecoder("utf-16be").decode(buf);
 try{return new TextDecoder("utf-8",{fatal:true}).decode(buf).replace(/^\uFEFF/,"")}
 catch(e){return new TextDecoder("windows-1253").decode(buf)}
 }
 function parseCSV(txt){
-var first=txt.split(/\r?\n/,1)[0],sep=[";",",","\t"].sort(function(a,b){return first.split(b).length-first.split(a).length})[0];
+// \u0394\u03B9\u03B1\u03C7\u03C9\u03C1\u03B9\u03C3\u03C4\u03B9\u03BA\u03CC: \u03B1\u03C5\u03C4\u03CC \u03C0\u03BF\u03C5 \u03B4\u03AF\u03BD\u03B5\u03B9 \u03C4\u03B9\u03C2 \u03C0\u03B5\u03C1\u03B9\u03C3\u03C3\u03CC\u03C4\u03B5\u03C1\u03B5\u03C2 \u03C3\u03C4\u03AE\u03BB\u03B5\u03C2 \u03C3\u03B5 \u03BA\u03AC\u03C0\u03BF\u03B9\u03B1 \u03B1\u03C0\u03CC \u03C4\u03B9\u03C2 \u03C0\u03C1\u03CE\u03C4\u03B5\u03C2 \u03B3\u03C1\u03B1\u03BC\u03BC\u03AD\u03C2
+// (\u03B7 \u03C0\u03C1\u03CE\u03C4\u03B7 \u03B3\u03C1\u03B1\u03BC\u03BC\u03AE \u03BC\u03C0\u03BF\u03C1\u03B5\u03AF \u03BD\u03B1 \u03B5\u03AF\u03BD\u03B1\u03B9 \u03C4\u03AF\u03C4\u03BB\u03BF\u03C2 \u03BC\u03B5 \u03BB\u03AF\u03B3\u03B1 \u03C0\u03B5\u03B4\u03AF\u03B1).
+var head=txt.split(/\r?\n/).slice(0,30),sep=[";","\t",","].map(function(s){return[s,Math.max.apply(null,head.map(function(l){return l.split(s).length}))]})
+.sort(function(a,b){return b[1]-a[1]})[0][0];
 var rows=[],row=[],f="",q=false;
 for(var i=0;i<txt.length;i++){var c=txt[i];
 if(q){if(c==='"'){if(txt[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
@@ -61,13 +67,18 @@ else if(c>=0)s=s.replace(",",".");
 else if(/^-?\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,"");
 return parseFloat(s)
 }
+// Τίτλοι στηλών χωρίς τόνους, κεφαλαία, εισαγωγικά, αλλαγές γραμμής και διπλά/αόρατα κενά.
+function norm(x){return String(x).replace(/﻿/g,"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/["']/g,"").replace(/\s+/g," ").trim()}
+// Πρώτα ακριβές ταίριασμα, μετά τίτλος που περιέχει το όνομα (π.χ. «Ποσό (€)»).
 function col(hdr,names){
-var h=hdr.map(function(x){return String(x).trim().toLowerCase()});
-for(var i=0;i<names.length;i++){var k=h.indexOf(names[i].toLowerCase());if(k>=0)return k}
+var h=hdr.map(norm),i,k;
+for(i=0;i<names.length;i++){k=h.indexOf(norm(names[i]));if(k>=0)return k}
+for(i=0;i<names.length;i++){var n=norm(names[i]);for(k=0;k<h.length;k++)if(h[k].indexOf(n)>=0)return k}
 return -1
 }
 function headerRow(rows,name){
-for(var i=0;i<Math.min(rows.length,15);i++)if(rows[i].some(function(x){return String(x).trim().toLowerCase()===name.toLowerCase()}))return i;
+var n=norm(name);
+for(var i=0;i<Math.min(rows.length,25);i++)if(rows[i].some(function(x){return norm(x).indexOf(n)>=0}))return i;
 return -1
 }
 
@@ -111,9 +122,9 @@ return{src:"Alpha",d:v&&v<d?v:d,a:toNum(r[iA])*(/^[ΧX]/i.test(String(r[iS]).tri
 });
 // «Νέο Μεικτό Υπόλοιπο ; ; 8.408,11 ; Π» και «Ημ/νία ; 29/10/2026 13:22» στις πρώτες γραμμές.
 var b=null,bd=null;
-rows.slice(0,h).forEach(function(r){var k=String(r[0]).trim();
-if(/^ημ\/νία$/i.test(k))bd=toDate(r[1]);
-if(/νέο.*υπόλοιπο/i.test(k)){var n=r.slice(1).map(toNum).filter(function(x){return!isNaN(x)})[0],neg=r.some(function(x){return/^[ΧX]$/.test(String(x).trim())});if(n!==undefined)b=neg?-n:n}});
+rows.slice(0,h).forEach(function(r){var k=norm(r[0]);
+if(/^ημ\/νια$/.test(k))bd=toDate(r[1]);
+if(/νεο.*υπολοιπο/.test(k)){var n=r.slice(1).map(toNum).filter(function(x){return!isNaN(x)})[0],neg=r.some(function(x){return/^[ΧX]$/.test(String(x).trim())});if(n!==undefined)b=neg?-n:n}});
 if(b!==null)L.bal={src:"Alpha",b:b,d:bd||L.reduce(function(a,t){return t.d>a?t.d:a},"")};
 return L
 }
