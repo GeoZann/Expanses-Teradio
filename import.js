@@ -211,23 +211,27 @@ return{c:"Άλλα έξοδα",why:"none"}
 function days(a,b){return Math.abs(new Date(a)-new Date(b))/864e5}
 
 // Από τις γραμμές των αρχείων βγάζει τη λίστα προεπισκόπησης.
+// Όσες είχες αφήσει χωρίς τικ σε παλιότερη εισαγωγή ξαναεμφανίζονται χωριστά (t.old), για να τις επαναφέρεις αν θέλεις.
+var PAIR=/μεταφορ|εμβασμ|transfer|top.?up|revolut|iris/i;
 function process(L,S){
-var have={};
+var have={},ign={};
 S.tx.forEach(function(t){if(t.uid)have[t.uid]=1});
-(S.ign||[]).forEach(function(u){have[u]=1});
-var dup=0,items=L.filter(function(t){if(have[t.uid]){dup++;return false}have[t.uid]=1;return true});
+(S.ign||[]).forEach(function(u){ign[u]=1});
+var dup=0,items=L.filter(function(t){if(have[t.uid]){dup++;return false}have[t.uid]=1;t.old=!!ign[t.uid];return true});
 items.forEach(function(t){
 var s=t.type+" "+t.m;
 if(!t.cash)t.cash=t.a<0&&WITHDRAW.test(s)?1:t.a>0&&DEPOSIT.test(s)?-1:0;
 if(!t.tr&&!t.cash)t.tr=TRANSFER.test(s)&&!/μισθ|salary|payroll/i.test(t.m)});
-// Μεταφορά μεταξύ δικών σου λογαριασμών: ίδιο ποσό, αντίθετο πρόσημο, άλλη τράπεζα, έως 3 ημέρες.
-var pool=items.filter(function(t){return!t.cash}).concat(S.tx.filter(function(t){return t.src&&t.k!=="t"}).map(function(t){return{src:t.src,d:t.d,a:t.k==="i"?t.a:-t.a,old:1}}));
+// Μεταφορά μεταξύ δικών σου λογαριασμών: ίδιο ποσό, αντίθετο πρόσημο, άλλη τράπεζα, έως 3 ημέρες,
+// και οι δύο πλευρές μοιάζουν με μεταφορά (όχι π.χ. αγορά με κάρτα απέναντι σε έμβασμα από φίλο).
+var pool=items.filter(function(t){return!t.cash&&!t.old&&PAIR.test(t.type+" "+t.m)}).concat(S.tx.filter(function(t){return t.src&&t.k!=="t"&&PAIR.test((t.type||"")+" "+t.n)})
+.map(function(t){return{src:t.src,d:t.d,a:t.k==="i"?t.a:-t.a,ex:1}}));
 items.forEach(function(t){
-if(t.tr||t.cash)return;
+if(t.tr||t.cash||t.old||pool.indexOf(t)<0)return;
 var o=pool.find(function(x){return x!==t&&x.src!==t.src&&!x.used&&Math.abs(x.a+t.a)<0.005&&days(x.d,t.d)<=3});
-if(o){t.tr=true;t.used=true;o.used=true;if(!o.old)o.tr=true}
+if(o){t.tr=true;t.used=true;o.used=true;t.pair=o.src+" "+o.d.split("-").reverse().join("/");if(!o.ex){o.tr=true;o.pair=t.src+" "+t.d.split("-").reverse().join("/")}}
 });
-items.forEach(function(t){var s=suggest(t,S);t.k=t.cash?"t":t.a>0?"i":"e";t.c=s.c;t.why=s.why;t.mk=mkey(t.m);t.on=!t.tr;delete t.used});
+items.forEach(function(t){var s=suggest(t,S);t.k=t.cash?"t":t.a>0?"i":"e";t.c=s.c;t.why=s.why;t.mk=mkey(t.m);t.on=!t.tr&&!t.old;delete t.used});
 items.sort(function(a,b){return a.d<b.d?1:-1});
 return{items:items,dup:dup}
 }

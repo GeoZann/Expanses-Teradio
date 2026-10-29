@@ -161,28 +161,33 @@ return'<section><h2>Συνολικά χρήματα</h2><div class="bal num'+(to
 '<small style="color:var(--mut)">Τα υπόλοιπα των τραπεζών ενημερώνονται μόνα τους από τα αρχεία λογαριασμού. Αν θέλεις, γράψε ένα ποσό για να τα διορθώσεις με το χέρι.</small></section>'
 }
 function importView(){
-var it=imp.items,n=it.filter(function(t){return t.on}).length;
+var it=imp.items,n=it.filter(function(t){return t.on}).length,nw=it.filter(function(t){return!t.old}),old=it.length-nw.length;
 var h='<section><h2>Προεπισκόπηση εισαγωγής</h2>';
 imp.errs.forEach(function(e){h+='<p class="hint err">'+esc(e)+"</p>"});
-h+='<p class="hint">'+it.length+" νέες κινήσεις"+(imp.dup?" · "+imp.dup+" υπάρχουν ήδη και παραλείπονται":"")+
-(it.some(function(t){return t.tr})?". Οι μεταφορές ανάμεσα στους λογαριασμούς σου δεν είναι επιλεγμένες, για να μη μετρήσουν διπλά.":".")+
-(it.some(function(t){return t.k==="t"})?" Οι αναλήψεις περνούν στα μετρητά, όχι στα έξοδα.":"")+"</p>";
+h+='<p class="hint">'+nw.length+" νέες κινήσεις"+(imp.dup?" · "+imp.dup+" υπάρχουν ήδη και παραλείπονται":"")+
+(nw.some(function(t){return t.tr})?". Οι μεταφορές ανάμεσα στους λογαριασμούς σου δεν είναι επιλεγμένες, για να μη μετρήσουν διπλά.":".")+
+(nw.some(function(t){return t.k==="t"})?" Οι αναλήψεις περνούν στα μετρητά, όχι στα έξοδα.":"")+"</p>";
 imp.bals.forEach(function(b){h+='<p class="hint">Υπόλοιπο '+esc(b.src)+": <b class=\"num\">"+eur(b.b)+"</b> στις "+b.d.split("-").reverse().join("/")+"</p>"});
 if(!it.length)return h+'<div class="acts"><button id="ix">Επιστροφή</button></div></section>';
-it.forEach(function(t,i){
+function row(t,i){
 var cs=t.k==="i"?INC:EXP,sg=t.k==="t"?"":t.k==="i"?"+":"−";
-h+='<div class="it'+(t.on?"":" off")+'"><input type="checkbox" data-on="'+i+'"'+(t.on?" checked":"")+' aria-label="Εισαγωγή κίνησης"><div>'+esc(t.m)+
-"<small>"+t.d.split("-").reverse().join("/")+" · "+esc(t.src)+(t.type&&t.type!==t.m?" · "+esc(t.type):"")+(t.pend?" · σε επεξεργασία":"")+(t.why==="rule"?" · από κανόνα":"")+(t.tr?'<span class="tag">μεταφορά</span>':"")+
+return'<div class="it'+(t.on?"":" off")+'"><input type="checkbox" data-on="'+i+'"'+(t.on?" checked":"")+' aria-label="Εισαγωγή κίνησης"><div>'+esc(t.m)+
+"<small>"+t.d.split("-").reverse().join("/")+" · "+esc(t.src)+(t.type&&t.type!==t.m?" · "+esc(t.type):"")+(t.pend?" · σε επεξεργασία":"")+(t.why==="rule"?" · από κανόνα":"")+
+(t.tr?'<span class="tag">μεταφορά</span>'+(t.pair?" ίδιο ποσό: "+esc(t.pair):""):"")+
 (t.k==="t"?'<span class="tag">'+(t.cash>0?"→ μετρητά":"μετρητά →")+"</span>":"")+"</small></div>"+
 '<b class="num '+(t.k==="i"?"pos":t.k==="e"?"neg":"")+'">'+sg+eur(Math.abs(t.a))+"</b>"+
-(t.k==="t"?"":'<select data-c="'+i+'" aria-label="Κατηγορία">'+cs.map(function(c){return"<option"+(c===t.c?" selected":"")+">"+esc(c)+"</option>"}).join("")+"</select>")+"</div>"});
+(t.k==="t"?"":'<select data-c="'+i+'" aria-label="Κατηγορία">'+cs.map(function(c){return"<option"+(c===t.c?" selected":"")+">"+esc(c)+"</option>"}).join("")+"</select>")+"</div>"}
+it.forEach(function(t,i){if(!t.old)h+=row(t,i)});
+// Όσες είχες αφήσει χωρίς τικ σε παλιότερη εισαγωγή: κρυμμένες, για να τις επαναφέρεις αν χρειαστεί.
+if(old){h+='<details style="margin-top:10px"><summary class="hint" style="cursor:pointer">'+old+" κινήσεις που είχες παραλείψει σε παλιότερη εισαγωγή</summary>";
+it.forEach(function(t,i){if(t.old)h+=row(t,i)});h+="</details>"}
 return h+'<div class="acts"><button id="ix">Ακύρωση</button><button id="iok">Εισαγωγή '+n+"</button></div></section>"
 }
 function wireImport(v){
 var it=imp.items;
 // Τα υπόλοιπα των αρχείων ενημερώνουν τις τράπεζες, αν είναι νεότερα από όσα ξέρουμε.
 function bals(){imp.bals.forEach(function(b){var o=S.acc[b.src];if(!o||b.d>=o.d)S.acc[b.src]={b:b.b,d:b.d}})}
-document.getElementById("ix").onclick=function(){if(!it.length&&imp.bals.length){bals();save()}imp=null;render()};
+document.getElementById("ix").onclick=function(){if(!it.some(function(t){return!t.old})&&imp.bals.length){bals();save()}imp=null;render()};
 var ok=document.getElementById("iok");if(!ok)return;
 function cnt(){ok.textContent="Εισαγωγή "+it.filter(function(t){return t.on}).length}
 v.querySelectorAll("[data-on]").forEach(function(x){x.onchange=function(){var t=it[x.dataset.on];t.on=x.checked;x.parentNode.classList.toggle("off",!t.on);cnt()}});
@@ -193,8 +198,11 @@ ok.onclick=function(){
 var last="";
 it.forEach(function(t,i){
 if(t.ed&&t.mk)S.rules[t.mk]=t.c;
-if(!t.on){S.ign.push(t.uid);return}
+if(!t.on){if(!t.old)S.ign.push(t.uid);return}
+if(t.old)S.ign=S.ign.filter(function(u){return u!==t.uid});
+if(t.type&&t.type!==t.m)t.keep=t.type;
 var x={id:Date.now()+""+i,k:t.k,a:Math.round(Math.abs(t.a)*100)/100,c:t.c,d:t.d,n:t.m,src:t.src,uid:t.uid};
+if(t.keep)x.type=t.keep;
 if(t.k==="t"){x.cash=t.cash;x.c=t.cash>0?"Ανάληψη μετρητών":"Κατάθεση μετρητών"}
 S.tx.push(x);
 if(t.d>last)last=t.d});
