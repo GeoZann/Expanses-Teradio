@@ -82,6 +82,7 @@ nav[hidden]{display:none}
 <button role="tab" data-t="s" aria-selected="true">Σύνοψη</button>
 <button role="tab" data-t="k" aria-selected="false">Κινήσεις</button>
 <button role="tab" data-t="b" aria-selected="false">Budget</button>
+<button role="tab" data-t="x" aria-selected="false">Χρήματα</button>
 </nav>
 <div id="v"></div>
 <footer id="ac"></footer>
@@ -95,7 +96,8 @@ var COL=["#d6336c","#e8a317","#13806a","#2f6fd0","#8a4fc0","#c8643c","#3aa0a8","
 var S={tx:[],bud:{}};
 // Με σύνδεση, ξεκινάμε από το αντίγραφο του cloud (tetradio-cloud) μέχρι να απαντήσει το Firestore.
 try{var r=localStorage.getItem("tetradio-cloud")||localStorage.getItem("tetradio1");if(r)S=JSON.parse(r)}catch(e){}
-S.rules=S.rules||{};S.ign=S.ign||[];
+S.rules=S.rules||{};S.ign=S.ign||[];S.acc=S.acc||{};S.cash=S.cash||null;
+var BANKS=["Alpha","Πειραιώς","Revolut"];
 function save(){if(window.CL&&CL.user){CL.push();return}try{localStorage.setItem("tetradio1",JSON.stringify(S))}catch(e){}}
 var d0=new Date(),m=d0.getFullYear()+"-"+String(d0.getMonth()+1).padStart(2,"0"),tab="s",imp=null;
 function eur(n){return n.toLocaleString("el-GR",{style:"currency",currency:"EUR"})}
@@ -104,7 +106,7 @@ function shift(k){var p=m.split("-"),x=new Date(+p[0],+p[1]-1+k,1);m=x.getFullYe
 function data(){
 var L=S.tx.filter(function(t){return t.d.indexOf(m)===0}).sort(function(a,b){return a.d<b.d?1:-1});
 var inc=0,exp=0,by={};
-L.forEach(function(t){if(t.k==="i")inc+=t.a;else{exp+=t.a;by[t.c]=(by[t.c]||0)+t.a}});
+L.forEach(function(t){if(t.k==="i")inc+=t.a;else if(t.k==="e"){exp+=t.a;by[t.c]=(by[t.c]||0)+t.a}});
 return{L:L,inc:inc,exp:exp,by:by}
 }
 function summary(D){
@@ -127,11 +129,12 @@ var h='<section><h2>Εισαγωγή από τράπεζα</h2><p class="hint">�
 '<input type="file" id="ff" multiple accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden><button type="button" id="fb" style="width:100%">Επιλογή αρχείου</button></section>';
 h+='<section><h2>Νέα κίνηση</h2><form id="f"><select id="fk" class="w"><option value="e">Έξοδο</option><option value="i">Έσοδο</option></select>'+
 '<input id="fa" type="number" step="0.01" min="0" placeholder="Ποσό €" inputmode="decimal" aria-label="Ποσό">'+
-'<input id="fd" type="date" aria-label="Ημερομηνία"><select id="fc" class="w" aria-label="Κατηγορία"></select>'+
+'<input id="fd" type="date" aria-label="Ημερομηνία"><select id="fc" aria-label="Κατηγορία"></select><select id="fp" aria-label="Τρόπος πληρωμής"><option value="c">Μετρητά</option><option value="">Κάρτα / τράπεζα</option></select>'+
 '<input id="fn" class="w" placeholder="Σημείωση (προαιρετικά)" aria-label="Σημείωση"><button type="button" id="add" class="w">Αποθήκευση κίνησης</button></form></section>';
 h+="<section><h2>Κινήσεις μήνα</h2>";
 if(!D.L.length)h+='<div class="empty">Καμία κίνηση ακόμα.</div>';
-D.L.forEach(function(t){h+='<div class="tx"><div>'+esc(t.c)+"<small>"+t.d.split("-").reverse().join("/")+(t.n?" · "+esc(t.n):"")+(t.src?" · "+esc(t.src):"")+'</small></div><div><b class="num '+(t.k==="i"?"pos":"neg")+'">'+(t.k==="i"?"+":"−")+eur(t.a)+'</b> <button data-del="'+t.id+'" aria-label="Διαγραφή">×</button></div></div>'});
+D.L.forEach(function(t){var sg=t.k==="i"?"+":t.k==="e"?"−":"";
+h+='<div class="tx"><div>'+esc(t.c)+"<small>"+t.d.split("-").reverse().join("/")+(t.n?" · "+esc(t.n):"")+(t.src?" · "+esc(t.src):"")+(t.cash&&t.k!=="t"?" · μετρητά":"")+'</small></div><div><b class="num '+(t.k==="i"?"pos":t.k==="e"?"neg":"")+'">'+sg+eur(t.a)+'</b> <button data-del="'+t.id+'" aria-label="Διαγραφή">×</button></div></div>'});
 return h+"</section>"
 }
 function budget(D){
@@ -140,24 +143,46 @@ EXP.forEach(function(c){var b=S.bud[c]||0,v=D.by[c]||0,pc=b?Math.min(v/b*100,100
 h+='<div class="bud"><div><div class="lbl"><span>'+esc(c)+'</span><span class="num '+(over?"neg":"")+'">'+eur(v)+(b?" / "+eur(b):"")+'</span></div><div class="bar"><i style="width:'+pc+"%;background:"+(over?"var(--acc)":"var(--pos)")+'"></i></div></div><input type="number" min="0" step="10" data-b="'+esc(c)+'" value="'+(b||"")+'" placeholder="Budget €" aria-label="Budget '+esc(c)+'"></div>'});
 return h+'<small style="color:var(--mut)">Το budget ισχύει για κάθε μήνα. Με κόκκινο φαίνονται οι κατηγορίες που το ξεπέρασαν.</small></section>'
 }
+// Μετρητά: το ποσό που δήλωσες (S.cash) συν τις αναλήψεις, μείον τα έξοδα με μετρητά που έγιναν μετά.
+function cashNow(){
+var c=S.cash;if(!c)return null;
+var v=c.b;
+S.tx.forEach(function(t){if(t.cash&&(t.d>c.d||(t.d===c.d&&+String(t.id).slice(0,13)>c.t)))v+=t.cash*t.a});
+return Math.round(v*100)/100
+}
+function money(){
+var cash=cashNow(),tot=0,any=false,rows="";
+function dt(d){return d?d.split("-").reverse().join("/"):""}
+BANKS.forEach(function(k){var o=S.acc[k];if(o){tot+=o.b;any=true}
+rows+='<div class="bud"><div><div class="lbl"><span>'+esc(k)+'</span><b class="num">'+(o?eur(o.b):"—")+'</b></div><small style="color:var(--mut)">'+(o?"στις "+dt(o.d):"Δεν υπάρχει ακόμα υπόλοιπο")+'</small></div><input type="number" step="0.01" data-acc="'+esc(k)+'" placeholder="Υπόλοιπο €" aria-label="Υπόλοιπο '+esc(k)+'"></div>'});
+if(cash!==null){tot+=cash;any=true}
+rows+='<div class="bud"><div><div class="lbl"><span>Μετρητά</span><b class="num">'+(cash===null?"—":eur(cash))+'</b></div><small style="color:var(--mut)">'+(cash===null?"Γράψε πόσα μετρητά έχεις τώρα":"από "+dt(S.cash.d)+": + αναλήψεις − έξοδα με μετρητά")+'</small></div><input type="number" step="0.01" min="0" data-acc="cash" placeholder="Τώρα έχω €" aria-label="Μετρητά τώρα"></div>';
+return'<section><h2>Συνολικά χρήματα</h2><div class="bal num'+(tot<0?" neg":"")+'">'+(any?eur(tot):"—")+"</div>"+rows+
+'<small style="color:var(--mut)">Τα υπόλοιπα των τραπεζών ενημερώνονται μόνα τους από τα αρχεία λογαριασμού. Αν θέλεις, γράψε ένα ποσό για να τα διορθώσεις με το χέρι.</small></section>'
+}
 function importView(){
 var it=imp.items,n=it.filter(function(t){return t.on}).length;
 var h='<section><h2>Προεπισκόπηση εισαγωγής</h2>';
 imp.errs.forEach(function(e){h+='<p class="hint err">'+esc(e)+"</p>"});
 h+='<p class="hint">'+it.length+" νέες κινήσεις"+(imp.dup?" · "+imp.dup+" υπάρχουν ήδη και παραλείπονται":"")+
-(it.some(function(t){return t.tr})?". Οι μεταφορές και οι αναλήψεις δεν είναι επιλεγμένες, για να μη μετρήσουν διπλά.":".")+"</p>";
+(it.some(function(t){return t.tr})?". Οι μεταφορές ανάμεσα στους λογαριασμούς σου δεν είναι επιλεγμένες, για να μη μετρήσουν διπλά.":".")+
+(it.some(function(t){return t.k==="t"})?" Οι αναλήψεις περνούν στα μετρητά, όχι στα έξοδα.":"")+"</p>";
+imp.bals.forEach(function(b){h+='<p class="hint">Υπόλοιπο '+esc(b.src)+": <b class=\"num\">"+eur(b.b)+"</b> στις "+b.d.split("-").reverse().join("/")+"</p>"});
 if(!it.length)return h+'<div class="acts"><button id="ix">Επιστροφή</button></div></section>';
 it.forEach(function(t,i){
-var cs=t.k==="i"?INC:EXP;
+var cs=t.k==="i"?INC:EXP,sg=t.k==="t"?"":t.k==="i"?"+":"−";
 h+='<div class="it'+(t.on?"":" off")+'"><input type="checkbox" data-on="'+i+'"'+(t.on?" checked":"")+' aria-label="Εισαγωγή κίνησης"><div>'+esc(t.m)+
-"<small>"+t.d.split("-").reverse().join("/")+" · "+esc(t.src)+(t.pend?" · σε επεξεργασία":"")+(t.why==="rule"?" · από κανόνα":"")+(t.tr?'<span class="tag">μεταφορά</span>':"")+"</small></div>"+
-'<b class="num '+(t.k==="i"?"pos":"neg")+'">'+(t.k==="i"?"+":"−")+eur(Math.abs(t.a))+"</b>"+
-'<select data-c="'+i+'" aria-label="Κατηγορία">'+cs.map(function(c){return"<option"+(c===t.c?" selected":"")+">"+esc(c)+"</option>"}).join("")+"</select></div>"});
+"<small>"+t.d.split("-").reverse().join("/")+" · "+esc(t.src)+(t.type&&t.type!==t.m?" · "+esc(t.type):"")+(t.pend?" · σε επεξεργασία":"")+(t.why==="rule"?" · από κανόνα":"")+(t.tr?'<span class="tag">μεταφορά</span>':"")+
+(t.k==="t"?'<span class="tag">'+(t.cash>0?"→ μετρητά":"μετρητά →")+"</span>":"")+"</small></div>"+
+'<b class="num '+(t.k==="i"?"pos":t.k==="e"?"neg":"")+'">'+sg+eur(Math.abs(t.a))+"</b>"+
+(t.k==="t"?"":'<select data-c="'+i+'" aria-label="Κατηγορία">'+cs.map(function(c){return"<option"+(c===t.c?" selected":"")+">"+esc(c)+"</option>"}).join("")+"</select>")+"</div>"});
 return h+'<div class="acts"><button id="ix">Ακύρωση</button><button id="iok">Εισαγωγή '+n+"</button></div></section>"
 }
 function wireImport(v){
 var it=imp.items;
-document.getElementById("ix").onclick=function(){imp=null;render()};
+// Τα υπόλοιπα των αρχείων ενημερώνουν τις τράπεζες, αν είναι νεότερα από όσα ξέρουμε.
+function bals(){imp.bals.forEach(function(b){var o=S.acc[b.src];if(!o||b.d>=o.d)S.acc[b.src]={b:b.b,d:b.d}})}
+document.getElementById("ix").onclick=function(){if(!it.length&&imp.bals.length){bals();save()}imp=null;render()};
 var ok=document.getElementById("iok");if(!ok)return;
 function cnt(){ok.textContent="Εισαγωγή "+it.filter(function(t){return t.on}).length}
 v.querySelectorAll("[data-on]").forEach(function(x){x.onchange=function(){var t=it[x.dataset.on];t.on=x.checked;x.parentNode.classList.toggle("off",!t.on);cnt()}});
@@ -169,15 +194,17 @@ var last="";
 it.forEach(function(t,i){
 if(t.ed&&t.mk)S.rules[t.mk]=t.c;
 if(!t.on){S.ign.push(t.uid);return}
-S.tx.push({id:Date.now()+""+i,k:t.k,a:Math.round(Math.abs(t.a)*100)/100,c:t.c,d:t.d,n:t.m,src:t.src,uid:t.uid});
+var x={id:Date.now()+""+i,k:t.k,a:Math.round(Math.abs(t.a)*100)/100,c:t.c,d:t.d,n:t.m,src:t.src,uid:t.uid};
+if(t.k==="t"){x.cash=t.cash;x.c=t.cash>0?"Ανάληψη μετρητών":"Κατάθεση μετρητών"}
+S.tx.push(x);
 if(t.d>last)last=t.d});
-save();imp=null;if(last)m=last.slice(0,7);tab="k";render()}
+bals();save();imp=null;if(last)m=last.slice(0,7);tab="k";render()}
 }
 async function startImport(files){
-imp={items:[],dup:0,errs:[]};
+imp={items:[],dup:0,errs:[],bals:[]};
 document.getElementById("v").innerHTML='<section><div class="empty">Διαβάζω το αρχείο…</div></section>';
 var all=[];
-for(var i=0;i<files.length;i++){try{all=all.concat(await TI.readFile(files[i]))}catch(e){imp.errs.push(e.message)}}
+for(var i=0;i<files.length;i++){try{var L=await TI.readFile(files[i]);all=all.concat(L);if(L.bal)imp.bals.push(L.bal)}catch(e){imp.errs.push(e.message)}}
 var r=TI.process(all,S);imp.items=r.items;imp.dup=r.dup;render()
 }
 function account(){
@@ -200,7 +227,12 @@ document.querySelectorAll("nav button").forEach(function(x){x.setAttribute("aria
 var v=document.getElementById("v");
 document.querySelector("nav").hidden=!!imp;
 if(imp){v.innerHTML=importView();wireImport(v);return}
-v.innerHTML=tab==="s"?summary(D):tab==="k"?list(D):budget(D);
+v.innerHTML=tab==="s"?summary(D):tab==="k"?list(D):tab==="x"?money():budget(D);
+if(tab==="x")v.querySelectorAll("[data-acc]").forEach(function(x){x.onchange=function(){
+var n=parseFloat(x.value),td=new Date(),d=td.getFullYear()+"-"+String(td.getMonth()+1).padStart(2,"0")+"-"+String(td.getDate()).padStart(2,"0");
+if(isNaN(n))return;
+if(x.dataset.acc==="cash")S.cash={b:n,d:d,t:Date.now()};else S.acc[x.dataset.acc]={b:n,d:d};
+save();render()}});
 if(tab==="k"){
 var fk=document.getElementById("fk"),fc=document.getElementById("fc"),fd=document.getElementById("fd");
 var td=new Date();var tm=td.getFullYear()+"-"+String(td.getMonth()+1).padStart(2,"0");fd.value=m===tm?tm+"-"+String(td.getDate()).padStart(2,"0"):m+"-01";
@@ -209,7 +241,9 @@ cats();fk.onchange=cats;
 document.getElementById("add").onclick=function(){
 var a=parseFloat(document.getElementById("fa").value);
 if(!(a>0)||!fd.value){document.getElementById("fa").focus();return}
-S.tx.push({id:Date.now()+""+Math.floor(Math.random()*999),k:fk.value,a:a,c:fc.value,d:fd.value,n:document.getElementById("fn").value.trim()});
+var t={id:Date.now()+""+Math.floor(Math.random()*999),k:fk.value,a:a,c:fc.value,d:fd.value,n:document.getElementById("fn").value.trim()};
+if(document.getElementById("fp").value==="c")t.cash=t.k==="e"?-1:1;
+S.tx.push(t);
 save();m=fd.value.slice(0,7);render()};
 var ff=document.getElementById("ff");
 document.getElementById("fb").onclick=function(){ff.click()};

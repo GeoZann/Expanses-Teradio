@@ -20,7 +20,7 @@ const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabMana
 const CL = window.CL = { user: null, ready: false, err: "" };
 let have = new Set(), meta = "", unsub = [];
 const clean = (o) => JSON.parse(JSON.stringify(o));
-const metaOf = (s) => JSON.stringify({ bud: s.bud || {}, rules: s.rules || {}, ign: s.ign || [] });
+const metaOf = (s) => JSON.stringify({ bud: s.bud || {}, rules: s.rules || {}, ign: s.ign || [], acc: s.acc || {}, cash: s.cash || null });
 
 CL.signIn = async () => {
   CL.err = ""; const p = new GoogleAuthProvider();
@@ -58,6 +58,7 @@ CL.migrate = () => {
   S.bud = Object.assign({}, L.bud, S.bud);
   S.rules = Object.assign({}, L.rules, S.rules);
   S.ign = [...new Set([...(S.ign || []), ...(L.ign || [])])];
+  S.acc = Object.assign({}, L.acc, S.acc); S.cash = S.cash || L.cash || null;
   localStorage.setItem("tetradio1-moved", CL.user.uid);
   CL.push(); render();
 };
@@ -91,7 +92,7 @@ onAuthStateChanged(auth, (u) => {
   unsub.push(onSnapshot(doc(db, base + "/meta/settings"), (d) => {
     if (!d.exists() && d.metadata.fromCache) return;
     const v = d.exists() ? d.data() : {};
-    S.bud = v.bud || {}; S.rules = v.rules || {}; S.ign = v.ign || [];
+    S.bud = v.bud || {}; S.rules = v.rules || {}; S.ign = v.ign || []; S.acc = v.acc || {}; S.cash = v.cash || null;
     meta = metaOf(S); gotMeta = true; done();
   }, (e) => { CL.err = "Σφάλμα συγχρονισμού: " + e.code; render() }));
 });

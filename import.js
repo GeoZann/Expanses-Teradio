@@ -73,28 +73,67 @@ return -1
 
 /* ---------- Πηγές ---------- */
 
-// Πειραιώς (winbank, Excel): Κατηγορία | Περιγραφή Συναλλαγής | Ημ/νία Συναλλαγής | Ημ/νία Αξίας | Αριθμός Λογαριασμού | Αριθμός Παραστατικού | Ποσό | Νόμισμα
+// Πειραιώς (winbank, Excel), δύο μορφές με κοινή στήλη «Περιγραφή Συναλλαγής»:
+// κάρτα:      Κατηγορία | Περιγραφή («Αγορά -ΕΜΠΟΡΟΣ PO…») | Ημ/νία Συναλλαγής | Ημ/νία Αξίας | Αριθμός Λογαριασμού | Αριθμός Παραστατικού | Ποσό | Νόμισμα
+// λογαριασμός: Κατηγορία | Περιγραφή («ΑΓΟΡΑ ΜΕ ΚΑΡΤΑ») | Ημ/νία Συναλλαγής | Σχόλια / Κωδικός Αναφοράς | Ποσό | Νόμισμα | Προοδευτικό Λογιστικό Υπόλοιπο | Νόμισμα
 function piraeus(rows){
 var h=headerRow(rows,"Περιγραφή Συναλλαγής");if(h<0)return null;
-var H=rows[h],iD=col(H,["Ημ/νία Συναλλαγής","Ημ/νία Αξίας"]),iT=col(H,["Περιγραφή Συναλλαγής"]),iA=col(H,["Ποσό"]),iP=col(H,["Αριθμός Παραστατικού"]),iC=col(H,["Κατηγορία"]);
+var H=rows[h],iD=col(H,["Ημ/νία Συναλλαγής","Ημ/νία Αξίας"]),iT=col(H,["Περιγραφή Συναλλαγής"]),iA=col(H,["Ποσό"]),iP=col(H,["Αριθμός Παραστατικού"]),iC=col(H,["Κατηγορία"]),
+iN=col(H,["Σχόλια / Κωδικός Αναφοράς","Σχόλια"]),iB=col(H,["Προοδευτικό Λογιστικό Υπόλοιπο"]);
 if(iD<0||iA<0)return null;
-return rows.slice(h+1).map(function(r){
-var desc=String(r[iT]).trim(),m=desc.match(/^(.{2,30}?)\s+-\s*(.+)$/),type=m?m[1]:"",merch=(m?m[2]:desc).replace(/\s+PO\d{6,}$/i,"").trim();
-var hint=String(r[iC]||"").trim();
-return{src:"Πειραιώς",d:toDate(r[iD]),a:toNum(r[iA]),m:merch,type:type,hint:hint==="Χωρίς Κατηγορία"?"":hint,key:"pir|"+String(r[iP]).trim()+"|"+toDate(r[iD])+"|"+r[iA]}
-})
+var L=rows.slice(h+1).map(function(r){
+var desc=String(r[iT]).trim(),type,merch,key,hint=String(r[iC]||"").trim();
+if(iN>=0){
+// «MCDONALD S SPATA23,00 EUR4410…» → «MCDONALD S SPATA», «B/O ΟΝΟΜΑ / F26TI…» → «ΟΝΟΜΑ»
+var note=String(r[iN]).trim();type=desc;
+merch=note.replace(/\s*\d{1,3}(?:[.,]\d{3})*[.,]\d{2}\s*[A-Z]{3}.*$/,"").replace(/^(B\/O|BEN|ΠΡΟΣ|ΑΠΟ)[:\s]+/i,"").replace(/\s+\/\s+.*$/,"").trim()||desc;
+key="pira|"+toDate(r[iD])+"|"+desc+"|"+note+"|"+r[iA]+"|"+r[iB];
+}else{
+var m=desc.match(/^(.{2,30}?)\s+-\s*(.+)$/);type=m?m[1]:"";merch=(m?m[2]:desc).replace(/\s+PO\d{6,}$/i,"").trim();
+key="pir|"+String(r[iP]).trim()+"|"+toDate(r[iD])+"|"+r[iA];
+}
+return{src:"Πειραιώς",d:toDate(r[iD]),a:toNum(r[iA]),m:merch,type:type,hint:hint==="Χωρίς Κατηγορία"?"":hint,key:key,bal:iB>=0?toNum(r[iB]):NaN}
+});
+// Υπόλοιπο λογαριασμού: της πιο πρόσφατης γραμμής (το αρχείο μπορεί να είναι με αύξουσα ή φθίνουσα σειρά).
+var ok=L.filter(function(t){return t.d&&!isNaN(t.bal)});
+if(ok.length){var f=ok[0],l=ok[ok.length-1],x=l.d>f.d?l:f;L.bal={src:"Πειραιώς",b:x.bal,d:x.d}}
+return L
+}
+// Alpha λογαριασμός (CSV): λίγες γραμμές με υπόλοιπα, μετά
+// Α/Α ; Ημ/νία ; Αιτιολογία ; Κατάστημα ; Τοκισμός από ; Αρ. συναλλαγής ; Ποσό ; Πρόσημο ποσού (Χ χρέωση / Π πίστωση)
+function alphaAcc(rows){
+var h=headerRow(rows,"Πρόσημο ποσού");if(h<0)return null;
+var H=rows[h],iD=col(H,["Ημ/νία"]),iV=col(H,["Τοκισμός από"]),iM=col(H,["Αιτιολογία"]),iN=col(H,["Αρ. συναλλαγής"]),iA=col(H,["Ποσό"]),iS=col(H,["Πρόσημο ποσού"]);
+var L=rows.slice(h+1).map(function(r){
+// Μια αγορά με κάρτα περνά στον λογαριασμό μερικές μέρες μετά. Ο «Τοκισμός από» κρατά την πραγματική ημέρα.
+var d=toDate(r[iD]),v=iV>=0?toDate(r[iV]):null,m=String(r[iM]).trim();
+return{src:"Alpha",d:v&&v<d?v:d,a:toNum(r[iA])*(/^[ΧX]/i.test(String(r[iS]).trim())?-1:1),m:m,type:m,hint:"",key:"alphaa|"+String(r[iN]).trim()+"|"+r[iD]+"|"+r[iA]+"|"+r[iS]}
+});
+// «Νέο Μεικτό Υπόλοιπο ; ; 8.408,11 ; Π» και «Ημ/νία ; 29/10/2026 13:22» στις πρώτες γραμμές.
+var b=null,bd=null;
+rows.slice(0,h).forEach(function(r){var k=String(r[0]).trim();
+if(/^ημ\/νία$/i.test(k))bd=toDate(r[1]);
+if(/νέο.*υπόλοιπο/i.test(k)){var n=r.slice(1).map(toNum).filter(function(x){return!isNaN(x)})[0],neg=r.some(function(x){return/^[ΧX]$/.test(String(x).trim())});if(n!==undefined)b=neg?-n:n}});
+if(b!==null)L.bal={src:"Alpha",b:b,d:bd||L.reduce(function(a,t){return t.d>a?t.d:a},"")};
+return L
 }
 // Revolut (CSV): Type, Product, Started Date, Completed Date, Description, Amount, Fee, Currency, State, Balance
 function revolut(rows){
 var h=headerRow(rows,"Started Date");if(h<0)return null;
-var H=rows[h],iT=col(H,["Type"]),iP=col(H,["Product"]),iD=col(H,["Started Date"]),iM=col(H,["Description"]),iA=col(H,["Amount"]),iF=col(H,["Fee"]),iC=col(H,["Currency"]),iS=col(H,["State"]);
-return rows.slice(h+1).filter(function(r){var st=String(r[iS]).toUpperCase();return st!=="REVERTED"&&st!=="DECLINED"&&st!=="FAILED"}).map(function(r){
+var H=rows[h],iT=col(H,["Type"]),iP=col(H,["Product"]),iD=col(H,["Started Date"]),iE=col(H,["Completed Date"]),iM=col(H,["Description"]),iA=col(H,["Amount"]),iF=col(H,["Fee"]),iC=col(H,["Currency"]),iS=col(H,["State"]),iB=col(H,["Balance"]);
+var R=rows.slice(h+1).filter(function(r){var st=String(r[iS]).toUpperCase();return st!=="REVERTED"&&st!=="DECLINED"&&st!=="FAILED"});
+var L=R.map(function(r){
 var a=parseFloat(r[iA])-(parseFloat(r[iF])||0),cur=String(r[iC]||"EUR").trim(),type=String(r[iT]).trim(),prod=String(r[iP]||"");
 return{src:"Revolut",d:toDate(r[iD]),a:a,m:String(r[iM]).trim()+(cur&&cur!=="EUR"?" ("+cur+")":""),type:type,hint:"",pend:String(r[iS]).toUpperCase()==="PENDING",
-tr:/^(TOPUP|EXCHANGE)$/i.test(type)||/savings|deposit/i.test(prod),key:"rev|"+r[iD]+"|"+r[iM]+"|"+r[iA]}
-})
+tr:/^(TOPUP|EXCHANGE)$/i.test(type)||/savings|deposit/i.test(prod),cash:/^ATM$/i.test(type)?1:0,key:"rev|"+r[iD]+"|"+r[iM]+"|"+r[iA]}
+});
+// Υπόλοιπο: η πιο πρόσφατη ολοκληρωμένη κίνηση σε ευρώ του τρεχούμενου λογαριασμού.
+var last=null;
+R.forEach(function(r){if(String(r[iS]).toUpperCase()==="COMPLETED"&&String(r[iC]).trim()==="EUR"&&!/savings|deposit/i.test(r[iP]||"")&&r[iB]!==""&&(!last||String(r[iE])>String(last[iE])))last=r});
+if(last&&iB>=0)L.bal={src:"Revolut",b:parseFloat(last[iB]),d:toDate(last[iE])};
+return L
 }
-// Alpha (CSV, ;): Ημερομηνία ώρα ; Έμπορος ; Κατηγορία τράπεζας ; Τύπος ; Ποσό ; Κατάσταση
+// Alpha κάρτα (CSV, ;): Ημερομηνία ώρα ; Έμπορος ; Κατηγορία τράπεζας ; Τύπος ; Ποσό ; Κατάσταση
 function alpha(rows){
 var L=rows.filter(function(r){return r.length>=5&&/^\d{1,2}\/\d{1,2}\/\d{4}/.test(String(r[0]).trim())&&!isNaN(toNum(r[4]))});
 if(!L.length)return null;
@@ -102,16 +141,18 @@ return L.map(function(r){
 return{src:"Alpha",d:toDate(r[0]),a:toNum(r[4]),m:String(r[1]).trim(),type:String(r[3]).trim(),hint:String(r[2]).trim(),pend:/επεξεργασ/i.test(r[5]||""),key:"alpha|"+String(r[0]).trim()+"|"+String(r[1]).trim()+"|"+String(r[4]).trim()}
 })
 }
-var SOURCES=[piraeus,revolut,alpha];
+var SOURCES=[piraeus,alphaAcc,revolut,alpha];
 
+// Επιστρέφει τις κινήσεις του αρχείου και, αν το αρχείο το δίνει, το υπόλοιπο του λογαριασμού (L.bal).
 async function readFile(file){
 var rows=await readRows(file),L=null;
 for(var i=0;i<SOURCES.length&&!L;i++)L=SOURCES[i](rows);
 if(!L)throw new Error("Δεν αναγνώρισα τη μορφή του «"+file.name+"». Υποστηρίζονται αρχεία από Alpha, Πειραιώς και Revolut.");
 // Μοναδικό ID: ίδιες γραμμές στο ίδιο αρχείο (π.χ. δύο εισιτήρια το ίδιο λεπτό) παίρνουν αύξοντα αριθμό.
-var seen={};
-return L.filter(function(t){return t.d&&!isNaN(t.a)&&t.a!==0}).map(function(t){
-var n=seen[t.key]=(seen[t.key]||0)+1;t.uid=t.key+"|"+n;delete t.key;return t})
+var seen={},out=L.filter(function(t){return t.d&&!isNaN(t.a)&&t.a!==0}).map(function(t){
+var n=seen[t.key]=(seen[t.key]||0)+1;t.uid=t.key+"|"+n;delete t.key;delete t.bal;return t});
+out.bal=L.bal&&!isNaN(L.bal.b)?L.bal:null;
+return out
 }
 
 /* ---------- Επεξεργασία ---------- */
@@ -132,7 +173,9 @@ var KW=[
 ];
 // Κατηγορίες της τράπεζας (Alpha) ως τελευταία ένδειξη.
 var HINT=[["Σούπερ μάρκετ",/σουπερ|super/i],["Υγεία",/υγει/i],["Λογαριασμοί",/λογαριασμ|τηλεπικ|ενεργ/i],["Μεταφορές",/καυσιμ|μεταφορ|οχημ/i],["Αγορές",/ενδυσ|ηλεκτρον|αγορ/i]];
-var TRANSFER=/μεταφορ|transfer|top.?up|exchange|revolut|αναληψ|ανάληψ|\batm\b|πληρωμ\S* καρτ|εξοφλ/i;
+var TRANSFER=/μεταφορ|transfer|top.?up|exchange|revolut|πληρωμ\S* καρτ|εξοφλ/i;
+// Αναλήψεις και καταθέσεις μετρητών: δεν είναι έξοδο ή έσοδο, μετακινούν χρήματα από/προς τα μετρητά.
+var WITHDRAW=/αναληψ|ανάληψ|\batm\b|cash withdrawal/i,DEPOSIT=/καταθεσ\S* μετρητ|κατάθεσ\S* μετρητ|cash deposit/i;
 
 function suggest(t,S){
 var k=mkey(t.m),txt=String(t.m).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
@@ -150,15 +193,18 @@ var have={};
 S.tx.forEach(function(t){if(t.uid)have[t.uid]=1});
 (S.ign||[]).forEach(function(u){have[u]=1});
 var dup=0,items=L.filter(function(t){if(have[t.uid]){dup++;return false}have[t.uid]=1;return true});
-items.forEach(function(t){if(!t.tr)t.tr=TRANSFER.test(t.type+" "+t.m)&&!/μισθ|salary|payroll/i.test(t.m)});
-// Μεταφορά μεταξύ δικών σου λογαριασμών: ίδιο ποσό, αντίθετο πρόσημο, άλλη τράπεζα, έως 3 ημέρες.
-var pool=items.concat(S.tx.filter(function(t){return t.src}).map(function(t){return{src:t.src,d:t.d,a:t.k==="i"?t.a:-t.a,old:1}}));
 items.forEach(function(t){
-if(t.tr)return;
+var s=t.type+" "+t.m;
+if(!t.cash)t.cash=t.a<0&&WITHDRAW.test(s)?1:t.a>0&&DEPOSIT.test(s)?-1:0;
+if(!t.tr&&!t.cash)t.tr=TRANSFER.test(s)&&!/μισθ|salary|payroll/i.test(t.m)});
+// Μεταφορά μεταξύ δικών σου λογαριασμών: ίδιο ποσό, αντίθετο πρόσημο, άλλη τράπεζα, έως 3 ημέρες.
+var pool=items.filter(function(t){return!t.cash}).concat(S.tx.filter(function(t){return t.src&&t.k!=="t"}).map(function(t){return{src:t.src,d:t.d,a:t.k==="i"?t.a:-t.a,old:1}}));
+items.forEach(function(t){
+if(t.tr||t.cash)return;
 var o=pool.find(function(x){return x!==t&&x.src!==t.src&&!x.used&&Math.abs(x.a+t.a)<0.005&&days(x.d,t.d)<=3});
 if(o){t.tr=true;t.used=true;o.used=true;if(!o.old)o.tr=true}
 });
-items.forEach(function(t){var s=suggest(t,S);t.k=t.a>0?"i":"e";t.c=s.c;t.why=s.why;t.mk=mkey(t.m);t.on=!t.tr;delete t.used});
+items.forEach(function(t){var s=suggest(t,S);t.k=t.cash?"t":t.a>0?"i":"e";t.c=s.c;t.why=s.why;t.mk=mkey(t.m);t.on=!t.tr;delete t.used});
 items.sort(function(a,b){return a.d<b.d?1:-1});
 return{items:items,dup:dup}
 }
