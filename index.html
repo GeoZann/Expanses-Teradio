@@ -55,6 +55,16 @@ input,select{width:100%;padding:9px;border:1.5px solid var(--line);border-radius
 .empty{color:var(--mut);text-align:center;padding:12px 0}
 .bud{display:grid;grid-template-columns:1fr 110px;gap:8px;align-items:end;margin-bottom:6px}
 svg{width:100%;height:auto;display:block}
+.hint{color:var(--mut);font-size:.9rem;margin:0 0 10px}
+.it{display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--line)}
+.it input[type=checkbox]{width:20px;height:20px;accent-color:var(--ink)}
+.it small{color:var(--mut);display:block}
+.it select{grid-column:2/-1;padding:5px 8px}
+.it.off{opacity:.55}
+.tag{display:inline-block;font-size:.75rem;border:1px solid var(--acc);color:var(--acc);border-radius:4px;padding:0 5px;margin-left:4px}
+.acts{display:flex;gap:8px;margin-top:12px}.acts button{flex:1}
+.err{color:var(--acc)}
+nav[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -75,14 +85,16 @@ svg{width:100%;height:auto;display:block}
 </nav>
 <div id="v"></div>
 </main>
+<script src="import.js"></script>
 <script>
 var EXP=["Σούπερ μάρκετ","Στέγαση","Λογαριασμοί","Μεταφορές","Φαγητό έξω","Υγεία","Διασκέδαση","Αγορές","Άλλα έξοδα"];
 var INC=["Μισθός","Άλλα έσοδα"];
 var COL=["#d6336c","#e8a317","#13806a","#2f6fd0","#8a4fc0","#c8643c","#3aa0a8","#7a8a2a","#8d96b8"];
 var S={tx:[],bud:{}};
 try{var r=localStorage.getItem("tetradio1");if(r)S=JSON.parse(r)}catch(e){}
+S.rules=S.rules||{};S.ign=S.ign||[];
 function save(){try{localStorage.setItem("tetradio1",JSON.stringify(S))}catch(e){}}
-var d0=new Date(),m=d0.getFullYear()+"-"+String(d0.getMonth()+1).padStart(2,"0"),tab="s";
+var d0=new Date(),m=d0.getFullYear()+"-"+String(d0.getMonth()+1).padStart(2,"0"),tab="s",imp=null;
 function eur(n){return n.toLocaleString("el-GR",{style:"currency",currency:"EUR"})}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function shift(k){var p=m.split("-"),x=new Date(+p[0],+p[1]-1+k,1);m=x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0");render()}
@@ -108,13 +120,15 @@ h+='<div class="lbl"><span>'+esc(c)+'</span><b class="num">'+eur(v)+" ("+Math.ro
 return h+"</section>"
 }
 function list(D){
-var h='<section><h2>Νέα κίνηση</h2><form id="f"><select id="fk" class="w"><option value="e">Έξοδο</option><option value="i">Έσοδο</option></select>'+
+var h='<section><h2>Εισαγωγή από τράπεζα</h2><p class="hint">Αρχείο κινήσεων από Alpha, Πειραιώς ή Revolut (CSV ή Excel). Στο κινητό μπορείς και να το κοινοποιήσεις κατευθείαν στο Τετράδιο.</p>'+
+'<input type="file" id="ff" multiple accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden><button type="button" id="fb" style="width:100%">Επιλογή αρχείου</button></section>';
+h+='<section><h2>Νέα κίνηση</h2><form id="f"><select id="fk" class="w"><option value="e">Έξοδο</option><option value="i">Έσοδο</option></select>'+
 '<input id="fa" type="number" step="0.01" min="0" placeholder="Ποσό €" inputmode="decimal" aria-label="Ποσό">'+
 '<input id="fd" type="date" aria-label="Ημερομηνία"><select id="fc" class="w" aria-label="Κατηγορία"></select>'+
 '<input id="fn" class="w" placeholder="Σημείωση (προαιρετικά)" aria-label="Σημείωση"><button type="button" id="add" class="w">Αποθήκευση κίνησης</button></form></section>';
 h+="<section><h2>Κινήσεις μήνα</h2>";
 if(!D.L.length)h+='<div class="empty">Καμία κίνηση ακόμα.</div>';
-D.L.forEach(function(t){h+='<div class="tx"><div>'+esc(t.c)+"<small>"+t.d.split("-").reverse().join("/")+(t.n?" · "+esc(t.n):"")+'</small></div><div><b class="num '+(t.k==="i"?"pos":"neg")+'">'+(t.k==="i"?"+":"−")+eur(t.a)+'</b> <button data-del="'+t.id+'" aria-label="Διαγραφή">×</button></div></div>'});
+D.L.forEach(function(t){h+='<div class="tx"><div>'+esc(t.c)+"<small>"+t.d.split("-").reverse().join("/")+(t.n?" · "+esc(t.n):"")+(t.src?" · "+esc(t.src):"")+'</small></div><div><b class="num '+(t.k==="i"?"pos":"neg")+'">'+(t.k==="i"?"+":"−")+eur(t.a)+'</b> <button data-del="'+t.id+'" aria-label="Διαγραφή">×</button></div></div>'});
 return h+"</section>"
 }
 function budget(D){
@@ -122,6 +136,46 @@ var h='<section><h2>Μηνιαίο budget ανά κατηγορία</h2>';
 EXP.forEach(function(c){var b=S.bud[c]||0,v=D.by[c]||0,pc=b?Math.min(v/b*100,100):0,over=b&&v>b;
 h+='<div class="bud"><div><div class="lbl"><span>'+esc(c)+'</span><span class="num '+(over?"neg":"")+'">'+eur(v)+(b?" / "+eur(b):"")+'</span></div><div class="bar"><i style="width:'+pc+"%;background:"+(over?"var(--acc)":"var(--pos)")+'"></i></div></div><input type="number" min="0" step="10" data-b="'+esc(c)+'" value="'+(b||"")+'" placeholder="Budget €" aria-label="Budget '+esc(c)+'"></div>'});
 return h+'<small style="color:var(--mut)">Το budget ισχύει για κάθε μήνα. Με κόκκινο φαίνονται οι κατηγορίες που το ξεπέρασαν.</small></section>'
+}
+function importView(){
+var it=imp.items,n=it.filter(function(t){return t.on}).length;
+var h='<section><h2>Προεπισκόπηση εισαγωγής</h2>';
+imp.errs.forEach(function(e){h+='<p class="hint err">'+esc(e)+"</p>"});
+h+='<p class="hint">'+it.length+" νέες κινήσεις"+(imp.dup?" · "+imp.dup+" υπάρχουν ήδη και παραλείπονται":"")+
+(it.some(function(t){return t.tr})?". Οι μεταφορές και οι αναλήψεις δεν είναι επιλεγμένες, για να μη μετρήσουν διπλά.":".")+"</p>";
+if(!it.length)return h+'<div class="acts"><button id="ix">Επιστροφή</button></div></section>';
+it.forEach(function(t,i){
+var cs=t.k==="i"?INC:EXP;
+h+='<div class="it'+(t.on?"":" off")+'"><input type="checkbox" data-on="'+i+'"'+(t.on?" checked":"")+' aria-label="Εισαγωγή κίνησης"><div>'+esc(t.m)+
+"<small>"+t.d.split("-").reverse().join("/")+" · "+esc(t.src)+(t.pend?" · σε επεξεργασία":"")+(t.why==="rule"?" · από κανόνα":"")+(t.tr?'<span class="tag">μεταφορά</span>':"")+"</small></div>"+
+'<b class="num '+(t.k==="i"?"pos":"neg")+'">'+(t.k==="i"?"+":"−")+eur(Math.abs(t.a))+"</b>"+
+'<select data-c="'+i+'" aria-label="Κατηγορία">'+cs.map(function(c){return"<option"+(c===t.c?" selected":"")+">"+esc(c)+"</option>"}).join("")+"</select></div>"});
+return h+'<div class="acts"><button id="ix">Ακύρωση</button><button id="iok">Εισαγωγή '+n+"</button></div></section>"
+}
+function wireImport(v){
+var it=imp.items;
+document.getElementById("ix").onclick=function(){imp=null;render()};
+var ok=document.getElementById("iok");if(!ok)return;
+function cnt(){ok.textContent="Εισαγωγή "+it.filter(function(t){return t.on}).length}
+v.querySelectorAll("[data-on]").forEach(function(x){x.onchange=function(){var t=it[x.dataset.on];t.on=x.checked;x.parentNode.classList.toggle("off",!t.on);cnt()}});
+// Αλλαγή κατηγορίας: περνά και στις υπόλοιπες κινήσεις του ίδιου εμπόρου και γίνεται κανόνας.
+v.querySelectorAll("[data-c]").forEach(function(x){x.onchange=function(){var t=it[x.dataset.c];t.c=x.value;t.ed=true;
+it.forEach(function(o,j){if(o!==t&&!o.ed&&o.mk===t.mk&&o.k===t.k){o.c=t.c;v.querySelector('[data-c="'+j+'"]').value=t.c}})}});
+ok.onclick=function(){
+var last="";
+it.forEach(function(t,i){
+if(t.ed&&t.mk)S.rules[t.mk]=t.c;
+if(!t.on){S.ign.push(t.uid);return}
+S.tx.push({id:Date.now()+""+i,k:t.k,a:Math.round(Math.abs(t.a)*100)/100,c:t.c,d:t.d,n:t.m,src:t.src,uid:t.uid});
+if(t.d>last)last=t.d});
+save();imp=null;if(last)m=last.slice(0,7);tab="k";render()}
+}
+async function startImport(files){
+imp={items:[],dup:0,errs:[]};
+document.getElementById("v").innerHTML='<section><div class="empty">Διαβάζω το αρχείο…</div></section>';
+var all=[];
+for(var i=0;i<files.length;i++){try{all=all.concat(await TI.readFile(files[i]))}catch(e){imp.errs.push(e.message)}}
+var r=TI.process(all,S);imp.items=r.items;imp.dup=r.dup;render()
 }
 function render(){
 var D=data(),p=m.split("-");
@@ -131,6 +185,8 @@ be.textContent=eur(b);be.className="bal num "+(b<0?"neg":"");
 document.getElementById("inc").textContent=eur(D.inc);document.getElementById("exp").textContent=eur(D.exp);
 document.querySelectorAll("nav button").forEach(function(x){x.setAttribute("aria-selected",x.dataset.t===tab)});
 var v=document.getElementById("v");
+document.querySelector("nav").hidden=!!imp;
+if(imp){v.innerHTML=importView();wireImport(v);return}
 v.innerHTML=tab==="s"?summary(D):tab==="k"?list(D):budget(D);
 if(tab==="k"){
 var fk=document.getElementById("fk"),fc=document.getElementById("fc"),fd=document.getElementById("fd");
@@ -142,7 +198,11 @@ var a=parseFloat(document.getElementById("fa").value);
 if(!(a>0)||!fd.value){document.getElementById("fa").focus();return}
 S.tx.push({id:Date.now()+""+Math.floor(Math.random()*999),k:fk.value,a:a,c:fc.value,d:fd.value,n:document.getElementById("fn").value.trim()});
 save();m=fd.value.slice(0,7);render()};
-v.querySelectorAll("[data-del]").forEach(function(x){x.onclick=function(){S.tx=S.tx.filter(function(t){return t.id!==x.dataset.del});save();render()}})
+var ff=document.getElementById("ff");
+document.getElementById("fb").onclick=function(){ff.click()};
+ff.onchange=function(){if(ff.files.length)startImport([].slice.call(ff.files))};
+// Μια εισαγμένη κίνηση που σβήνεις δεν ξαναμπαίνει σε επόμενη εισαγωγή.
+v.querySelectorAll("[data-del]").forEach(function(x){x.onclick=function(){S.tx=S.tx.filter(function(t){if(t.id===x.dataset.del&&t.uid)S.ign.push(t.uid);return t.id!==x.dataset.del});save();render()}})
 }
 if(tab==="b")v.querySelectorAll("[data-b]").forEach(function(x){x.onchange=function(){var n=parseFloat(x.value);if(n>0)S.bud[x.dataset.b]=n;else delete S.bud[x.dataset.b];save();render()}})
 }
@@ -150,6 +210,12 @@ document.getElementById("pv").onclick=function(){shift(-1)};
 document.getElementById("nx").onclick=function(){shift(1)};
 document.querySelectorAll("nav button").forEach(function(x){x.onclick=function(){tab=x.dataset.t;render()}});
 render();
+// Αρχεία που κοινοποιήθηκαν από το Android: ο service worker τα αφήνει στην cache "share".
+if(/[?&]share=1/.test(location.search)&&"caches" in window){
+history.replaceState(null,"",location.pathname);
+caches.open("share").then(function(c){return c.keys().then(function(ks){return Promise.all(ks.map(function(k){return c.match(k).then(function(r){
+return r.blob().then(function(b){return new File([b],decodeURIComponent(r.headers.get("X-Name")||"αρχείο"))})})}))})})
+.then(function(files){caches.delete("share");if(files.length)startImport(files)})}
 if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
 </script>
 </body>
