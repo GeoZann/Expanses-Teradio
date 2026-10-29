@@ -145,7 +145,9 @@ return h+'<small style="color:var(--mut)">Το budget ισχύει για κάθ
 }
 // Μετρητά: το ποσό που δήλωσες (S.cash) συν τις αναλήψεις, μείον τα έξοδα με μετρητά που έγιναν μετά.
 function cashNow(){
-var c=S.cash;if(!c)return null;
+// Χωρίς δηλωμένο ποσό ξεκινάμε από το 0, ώστε οι αναλήψεις να φαίνονται αμέσως.
+var c=S.cash||{b:0,d:"",t:0};
+if(!S.cash&&!S.tx.some(function(t){return t.cash}))return null;
 var v=c.b;
 S.tx.forEach(function(t){if(t.cash&&(t.d>c.d||(t.d===c.d&&+String(t.id).slice(0,13)>c.t)))v+=t.cash*t.a});
 return Math.round(v*100)/100
@@ -156,7 +158,7 @@ function dt(d){return d?d.split("-").reverse().join("/"):""}
 BANKS.forEach(function(k){var o=S.acc[k];if(o){tot+=o.b;any=true}
 rows+='<div class="bud"><div><div class="lbl"><span>'+esc(k)+'</span><b class="num">'+(o?eur(o.b):"—")+'</b></div><small style="color:var(--mut)">'+(o?"στις "+dt(o.d):"Δεν υπάρχει ακόμα υπόλοιπο")+'</small></div><input type="number" step="0.01" data-acc="'+esc(k)+'" placeholder="Υπόλοιπο €" aria-label="Υπόλοιπο '+esc(k)+'"></div>'});
 if(cash!==null){tot+=cash;any=true}
-rows+='<div class="bud"><div><div class="lbl"><span>Μετρητά</span><b class="num">'+(cash===null?"—":eur(cash))+'</b></div><small style="color:var(--mut)">'+(cash===null?"Γράψε πόσα μετρητά έχεις τώρα":"από "+dt(S.cash.d)+": + αναλήψεις − έξοδα με μετρητά")+'</small></div><input type="number" step="0.01" min="0" data-acc="cash" placeholder="Τώρα έχω €" aria-label="Μετρητά τώρα"></div>';
+rows+='<div class="bud"><div><div class="lbl"><span>Μετρητά</span><b class="num">'+(cash===null?"—":eur(cash))+'</b></div><small style="color:var(--mut)">'+(cash===null?"Γράψε πόσα μετρητά έχεις τώρα":S.cash?"από "+dt(S.cash.d)+": + αναλήψεις − έξοδα με μετρητά":"αναλήψεις − έξοδα με μετρητά, με αρχή το 0. Γράψε πόσα έχεις τώρα για ακριβές ποσό")+'</small></div><input type="number" step="0.01" min="0" data-acc="cash" placeholder="Τώρα έχω €" aria-label="Μετρητά τώρα"></div>';
 return'<section><h2>Συνολικά χρήματα</h2><div class="bal num'+(tot<0?" neg":"")+'">'+(any?eur(tot):"—")+"</div>"+rows+
 '<small style="color:var(--mut)">Τα υπόλοιπα των τραπεζών ενημερώνονται μόνα τους από τα αρχεία λογαριασμού. Αν θέλεις, γράψε ένα ποσό για να τα διορθώσεις με το χέρι.</small></section>'
 }
