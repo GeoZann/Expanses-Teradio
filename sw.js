@@ -1,5 +1,8 @@
-const CACHE = "tetradio-v3";
-const ASSETS = ["./", "index.html", "import.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "maskable-512.png", "apple-touch-icon.png"];
+const CACHE = "tetradio-v4";
+// Εκτός από τα δικά μας αρχεία, κρατάμε για offline μόνο βιβλιοθήκες και γραμματοσειρές.
+// Οι κλήσεις του Firebase (googleapis.com) περνούν απευθείας, γιατί είναι ροές δεδομένων.
+const CDN = ["www.gstatic.com", "cdn.jsdelivr.net", "fonts.googleapis.com", "fonts.gstatic.com"];
+const ASSETS = ["./", "index.html", "import.js", "cloud.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "maskable-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
@@ -31,7 +34,8 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(share(e.request));
     return;
   }
-  if (e.request.method !== "GET") return;
+  const host = new URL(e.request.url).host;
+  if (e.request.method !== "GET" || (host !== location.host && !CDN.includes(host))) return;
   e.respondWith(
     fetch(e.request)
       .then((res) => {

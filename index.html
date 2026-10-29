@@ -84,16 +84,19 @@ nav[hidden]{display:none}
 <button role="tab" data-t="b" aria-selected="false">Budget</button>
 </nav>
 <div id="v"></div>
+<footer id="ac"></footer>
 </main>
 <script src="import.js"></script>
+<script type="module" src="cloud.js"></script>
 <script>
 var EXP=["Σούπερ μάρκετ","Στέγαση","Λογαριασμοί","Μεταφορές","Φαγητό έξω","Υγεία","Διασκέδαση","Αγορές","Άλλα έξοδα"];
 var INC=["Μισθός","Άλλα έσοδα"];
 var COL=["#d6336c","#e8a317","#13806a","#2f6fd0","#8a4fc0","#c8643c","#3aa0a8","#7a8a2a","#8d96b8"];
 var S={tx:[],bud:{}};
-try{var r=localStorage.getItem("tetradio1");if(r)S=JSON.parse(r)}catch(e){}
+// Με σύνδεση, ξεκινάμε από το αντίγραφο του cloud (tetradio-cloud) μέχρι να απαντήσει το Firestore.
+try{var r=localStorage.getItem("tetradio-cloud")||localStorage.getItem("tetradio1");if(r)S=JSON.parse(r)}catch(e){}
 S.rules=S.rules||{};S.ign=S.ign||[];
-function save(){try{localStorage.setItem("tetradio1",JSON.stringify(S))}catch(e){}}
+function save(){if(window.CL&&CL.user){CL.push();return}try{localStorage.setItem("tetradio1",JSON.stringify(S))}catch(e){}}
 var d0=new Date(),m=d0.getFullYear()+"-"+String(d0.getMonth()+1).padStart(2,"0"),tab="s",imp=null;
 function eur(n){return n.toLocaleString("el-GR",{style:"currency",currency:"EUR"})}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
@@ -177,8 +180,18 @@ var all=[];
 for(var i=0;i<files.length;i++){try{all=all.concat(await TI.readFile(files[i]))}catch(e){imp.errs.push(e.message)}}
 var r=TI.process(all,S);imp.items=r.items;imp.dup=r.dup;render()
 }
+function account(){
+var C=window.CL,u=C&&C.user,h="";
+if(!C||!C.known)return"";
+if(C&&C.err)h+='<p class="hint err">'+esc(C.err)+"</p>";
+if(!u)return h+'<section><h2>Συγχρονισμός</h2><p class="hint">Τα δεδομένα είναι μόνο σε αυτή τη συσκευή. Συνδέσου με Google για να τα βλέπεις σε όλες τις συσκευές σου και να μη χάνονται.</p><button id="sin" style="width:100%">Σύνδεση με Google</button></section>';
+if(C.ready&&C.local())h+='<section><h2>Μεταφορά στον λογαριασμό</h2><p class="hint">Σε αυτή τη συσκευή υπάρχουν '+C.local().tx.length+' κινήσεις που δεν είναι στον λογαριασμό σου. Όσες υπάρχουν ήδη εκεί δεν θα διπλασιαστούν.</p><div class="acts"><button id="mskip">Όχι</button><button id="mgo">Μεταφορά</button></div></section>';
+return h+'<p class="hint" style="text-align:center">'+(C.ready?"Συγχρονισμένο":"Συγχρονισμός…")+" · "+esc(u.email||"")+' · <button id="sout" style="padding:2px 8px">Αποσύνδεση</button></p>'
+}
 function render(){
 var D=data(),p=m.split("-");
+var ac=document.getElementById("ac");ac.innerHTML=imp?"":account();
+[["sin","signIn"],["sout","signOut"],["mgo","migrate"],["mskip","skip"]].forEach(function(x){var b=document.getElementById(x[0]);if(b)b.onclick=function(){CL[x[1]]()}});
 document.getElementById("mt").textContent=new Date(+p[0],+p[1]-1,1).toLocaleDateString("el-GR",{month:"long",year:"numeric"});
 var b=D.inc-D.exp,be=document.getElementById("bal");
 be.textContent=eur(b);be.className="bal num "+(b<0?"neg":"");
