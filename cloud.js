@@ -33,19 +33,26 @@ CL.signIn = async () => {
 CL.signOut = () => signOut(auth);
 
 // Γράφει στο Firestore τη διαφορά ανάμεσα στο S και σε όσα έχει ήδη το cloud.
+// Κινήσεις που πρόσθεσες πριν ολοκληρωθεί η πρώτη ανάγνωση από το cloud: γράφονται μόλις ολοκληρωθεί.
+let queued = [];
 CL.push = async () => {
-  if (!CL.user || !CL.ready) return;
+  if (!CL.user) return;
+  cache();
+  if (!CL.ready) { S.tx.forEach((t) => { if (!have.has(t.id) && !queued.some((q) => q.id === t.id)) queued.push(t) }); return }
   const base = "users/" + CL.user.uid, ops = [];
   const ids = new Set(S.tx.map((t) => t.id));
-  S.tx.forEach((t) => { if (!have.has(t.id)) { have.add(t.id); ops.push((b) => b.set(doc(db, base + "/tx/" + t.id), clean(t))) } });
-  [...have].forEach((id) => { if (!ids.has(id)) { have.delete(id); ops.push((b) => b.delete(doc(db, base + "/tx/" + id))) } });
+  S.tx.forEach((t) => { if (!have.has(t.id)) { have.add(t.id); ops.push({ id: t.id, f: (b) => b.set(doc(db, base + "/tx/" + t.id), clean(t)) }) } });
+  [...have].forEach((id) => { if (!ids.has(id)) { have.delete(id); ops.push({ f: (b) => b.delete(doc(db, base + "/tx/" + id)) }) } });
   const m = metaOf(S);
-  if (m !== meta) { meta = m; ops.push((b) => b.set(doc(db, base + "/meta/settings"), JSON.parse(m))) }
-  cache();
-  // Ένα batch δέχεται έως 500 εγγραφές.
+  if (m !== meta) { meta = m; ops.push({ meta: 1, f: (b) => b.set(doc(db, base + "/meta/settings"), JSON.parse(m)) }) }
+  // Ένα batch δέχεται έως 500 εγγραφές. Αν αποτύχει, ξεχνάμε ότι το στείλαμε, για να ξαναδοκιμάσει στην επόμενη αλλαγή.
   for (let i = 0; i < ops.length; i += 450) {
-    const b = writeBatch(db); ops.slice(i, i + 450).forEach((f) => f(b));
-    b.commit().catch((e) => { CL.err = "Δεν αποθηκεύτηκε στο cloud: " + e.code; render() });
+    const part = ops.slice(i, i + 450), b = writeBatch(db);
+    part.forEach((o) => o.f(b));
+    b.commit().then(() => { if (CL.err) { CL.err = ""; render() } }).catch((e) => {
+      part.forEach((o) => { if (o.id) have.delete(o.id); if (o.meta) meta = "" });
+      CL.err = "Δεν αποθηκεύτηκε στο cloud (" + e.code + "). Θα ξαναδοκιμάσει στην επόμενη αλλαγή."; render();
+    });
   }
 };
 
@@ -78,18 +85,23 @@ onAuthStateChanged(auth, (u) => {
   // Ξαναζωγραφίζουμε μόνο όταν άλλαξαν τα δεδομένα, για να μη σβήνει μια φόρμα που συμπληρώνεις.
   const done = () => {
     if (!gotTx || !gotMeta) return;
+    const first = !CL.ready;
     CL.ready = true; cache();
+    if (first && queued.length) { queued.forEach((t) => { if (!S.tx.some((x) => x.id === t.id)) S.tx.push(t) }); queued = []; CL.push() }
     const key = [...have].sort().join() + meta;
     if (key !== shown) { shown = key; render() }
   };
   // Μια άδεια απάντηση από την cache δεν σημαίνει άδειο λογαριασμό: περιμένουμε τον server.
-  unsub.push(onSnapshot(collection(db, base + "/tx"), (q) => {
+  // Χωρίς includeMetadataChanges, η επιβεβαίωση του server για μια άδεια λίστα δεν φτάνει ποτέ
+  // και ο συγχρονισμός έμενε για πάντα «μη έτοιμος».
+  const live = { includeMetadataChanges: true };
+  unsub.push(onSnapshot(collection(db, base + "/tx"), live, (q) => {
     if (q.empty && q.metadata.fromCache) return;
     have = new Set(q.docs.map((d) => d.id));
     S.tx = q.docs.map((d) => Object.assign({ id: d.id }, d.data()));
     gotTx = true; done();
   }, (e) => { CL.err = "Σφάλμα συγχρονισμού: " + e.code; render() }));
-  unsub.push(onSnapshot(doc(db, base + "/meta/settings"), (d) => {
+  unsub.push(onSnapshot(doc(db, base + "/meta/settings"), live, (d) => {
     if (!d.exists() && d.metadata.fromCache) return;
     const v = d.exists() ? d.data() : {};
     S.bud = v.bud || {}; S.rules = v.rules || {}; S.ign = v.ign || []; S.acc = v.acc || {}; S.cash = v.cash || null;
