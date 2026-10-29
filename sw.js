@@ -1,4 +1,4 @@
-const CACHE = "tetradio-v6";
+const CACHE = "tetradio-v7";
 // Εκτός από τα δικά μας αρχεία, κρατάμε για offline μόνο βιβλιοθήκες και γραμματοσειρές.
 // Οι κλήσεις του Firebase (googleapis.com) περνούν απευθείας, γιατί είναι ροές δεδομένων.
 const CDN = ["www.gstatic.com", "cdn.jsdelivr.net", "fonts.googleapis.com", "fonts.gstatic.com"];
@@ -36,8 +36,10 @@ self.addEventListener("fetch", (e) => {
   }
   const host = new URL(e.request.url).host;
   if (e.request.method !== "GET" || (host !== location.host && !CDN.includes(host))) return;
+  // Τα δικά μας αρχεία πάντα με έλεγχο στον server: χωρίς αυτό ο browser κρατά την παλιά έκδοση έως 10 λεπτά.
+  const net = host === location.host ? fetch(e.request.url, { cache: "no-cache" }) : fetch(e.request);
   e.respondWith(
-    fetch(e.request)
+    net
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy));

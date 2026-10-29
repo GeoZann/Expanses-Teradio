@@ -12,18 +12,24 @@ if(window.XLSX)return Promise.resolve();
 return new Promise(function(ok,no){var s=document.createElement("script");s.src=XLSX_URL;s.onload=ok;
 s.onerror=function(){no(new Error("Δεν φόρτωσε ο αναγνώστης Excel. Χρειάζεται σύνδεση στο ίντερνετ την πρώτη φορά."))};document.head.appendChild(s)})
 }
+// \u03A3\u03C4\u03BF\u03B9\u03C7\u03B5\u03AF\u03B1 \u03C4\u03B7\u03C2 \u03C4\u03B5\u03BB\u03B5\u03C5\u03C4\u03B1\u03AF\u03B1\u03C2 \u03B1\u03BD\u03AC\u03B3\u03BD\u03C9\u03C3\u03B7\u03C2, \u03B3\u03B9\u03B1 \u03C4\u03BF \u03BC\u03AE\u03BD\u03C5\u03BC\u03B1 \u03CC\u03C4\u03B1\u03BD \u03B4\u03B5\u03BD \u03B1\u03BD\u03B1\u03B3\u03BD\u03C9\u03C1\u03AF\u03B6\u03B5\u03C4\u03B1\u03B9 \u03AD\u03BD\u03B1 \u03B1\u03C1\u03C7\u03B5\u03AF\u03BF.
+var info={};
 function decode(buf){
-var b=new Uint8Array(buf.slice(0,2));
-if(b[0]===0xFF&&b[1]===0xFE)return new TextDecoder("utf-16le").decode(buf);
-if(b[0]===0xFE&&b[1]===0xFF)return new TextDecoder("utf-16be").decode(buf);
-try{return new TextDecoder("utf-8",{fatal:true}).decode(buf).replace(/^\uFEFF/,"")}
-catch(e){return new TextDecoder("windows-1253").decode(buf)}
+var b=new Uint8Array(buf.slice(0,2)),z=new Uint8Array(buf.slice(0,200)).filter(function(x){return x===0}).length;
+if(b[0]===0xFF&&b[1]===0xFE)return info.enc="utf-16le",new TextDecoder("utf-16le").decode(buf);
+if(b[0]===0xFE&&b[1]===0xFF)return info.enc="utf-16be",new TextDecoder("utf-16be").decode(buf);
+// UTF-16 \u03C7\u03C9\u03C1\u03AF\u03C2 BOM: \u03C0\u03BF\u03BB\u03BB\u03AC \u03BC\u03B7\u03B4\u03B5\u03BD\u03B9\u03BA\u03AC bytes. \u0396\u03C5\u03B3\u03AC \u03AE \u03BC\u03BF\u03BD\u03AC \u03B4\u03B5\u03AF\u03C7\u03BD\u03BF\u03C5\u03BD \u03C4\u03B7 \u03C3\u03B5\u03B9\u03C1\u03AC.
+if(z>20){var nb=new Uint8Array(buf.slice(0,200)),odd=0;for(var i=1;i<nb.length;i+=2)if(nb[i]===0)odd++;
+info.enc=odd>z/2?"utf-16le":"utf-16be";return new TextDecoder(info.enc).decode(buf)}
+try{info.enc="utf-8";return new TextDecoder("utf-8",{fatal:true}).decode(buf).replace(/^\uFEFF/,"")}
+catch(e){info.enc="windows-1253";return new TextDecoder("windows-1253").decode(buf)}
 }
 function parseCSV(txt){
 // \u0394\u03B9\u03B1\u03C7\u03C9\u03C1\u03B9\u03C3\u03C4\u03B9\u03BA\u03CC: \u03B1\u03C5\u03C4\u03CC \u03C0\u03BF\u03C5 \u03B4\u03AF\u03BD\u03B5\u03B9 \u03C4\u03B9\u03C2 \u03C0\u03B5\u03C1\u03B9\u03C3\u03C3\u03CC\u03C4\u03B5\u03C1\u03B5\u03C2 \u03C3\u03C4\u03AE\u03BB\u03B5\u03C2 \u03C3\u03B5 \u03BA\u03AC\u03C0\u03BF\u03B9\u03B1 \u03B1\u03C0\u03CC \u03C4\u03B9\u03C2 \u03C0\u03C1\u03CE\u03C4\u03B5\u03C2 \u03B3\u03C1\u03B1\u03BC\u03BC\u03AD\u03C2
 // (\u03B7 \u03C0\u03C1\u03CE\u03C4\u03B7 \u03B3\u03C1\u03B1\u03BC\u03BC\u03AE \u03BC\u03C0\u03BF\u03C1\u03B5\u03AF \u03BD\u03B1 \u03B5\u03AF\u03BD\u03B1\u03B9 \u03C4\u03AF\u03C4\u03BB\u03BF\u03C2 \u03BC\u03B5 \u03BB\u03AF\u03B3\u03B1 \u03C0\u03B5\u03B4\u03AF\u03B1).
 var head=txt.split(/\r?\n/).slice(0,30),sep=[";","\t",","].map(function(s){return[s,Math.max.apply(null,head.map(function(l){return l.split(s).length}))]})
 .sort(function(a,b){return b[1]-a[1]})[0][0];
+info.sep=sep==="\t"?"tab":sep;
 var rows=[],row=[],f="",q=false;
 for(var i=0;i<txt.length;i++){var c=txt[i];
 if(q){if(c==='"'){if(txt[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
@@ -37,7 +43,9 @@ return rows.filter(function(r){return r.some(function(x){return String(x).trim()
 async function readRows(file){
 var buf=await file.arrayBuffer(),b=new Uint8Array(buf.slice(0,8)),head=decode(buf.slice(0,600)).toLowerCase();
 var excel=(b[0]===0x50&&b[1]===0x4B)||(b[0]===0xD0&&b[1]===0xCF)||head.indexOf("<table")>=0||head.indexOf("<html")>=0;
+info={size:buf.byteLength};
 if(!excel)return parseCSV(decode(buf));
+info.enc="excel";
 await loadXLSX();
 var wb=XLSX.read(buf,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]];
 return XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""}).filter(function(r){return r.some(function(x){return String(x).trim()})})
@@ -158,7 +166,11 @@ var SOURCES=[piraeus,alphaAcc,revolut,alpha];
 async function readFile(file){
 var rows=await readRows(file),L=null;
 for(var i=0;i<SOURCES.length&&!L;i++)L=SOURCES[i](rows);
-if(!L)throw new Error("Δεν αναγνώρισα τη μορφή του «"+file.name+"». Υποστηρίζονται αρχεία από Alpha, Πειραιώς και Revolut.");
+if(!L){
+// Τεχνικά στοιχεία χωρίς προσωπικά δεδομένα: μόνο η πρώτη λέξη από τις πρώτες γραμμές.
+var cols=rows.reduce(function(a,r){return Math.max(a,r.length)},0),firsts=rows.slice(0,7).map(function(r){return String(r[0]).trim().slice(0,14)}).join(" | ");
+throw new Error("Δεν αναγνώρισα τη μορφή του «"+file.name+"». Υποστηρίζονται αρχεία από Alpha, Πειραιώς και Revolut. ["+
+info.enc+(info.sep?", διαχωριστικό "+info.sep:"")+", "+info.size+" bytes, "+rows.length+" γραμμές, έως "+cols+" στήλες: "+firsts+"]")}
 // Μοναδικό ID: ίδιες γραμμές στο ίδιο αρχείο (π.χ. δύο εισιτήρια το ίδιο λεπτό) παίρνουν αύξοντα αριθμό.
 var seen={},out=L.filter(function(t){return t.d&&!isNaN(t.a)&&t.a!==0}).map(function(t){
 var n=seen[t.key]=(seen[t.key]||0)+1;t.uid=t.key+"|"+n;delete t.key;delete t.bal;return t});
