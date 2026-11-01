@@ -201,7 +201,7 @@ var TRANSFER=/μεταφορ|transfer|top.?up|exchange|revolut|πληρωμ\S* �
 var WITHDRAW=/αναληψ|ανάληψ|\batm\b|cash withdrawal/i,DEPOSIT=/καταθεσ\S* μετρητ|κατάθεσ\S* μετρητ|cash deposit/i;
 
 function suggest(t,S){
-var k=mkey(t.m),txt=String(t.m).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+var k=mkey(t.m),txt=String((t.type||"")+" "+t.m).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
 if(S.rules&&S.rules[k])return{c:S.rules[k],why:"rule"};
 if(t.a>0)return{c:/μισθ|salary|payroll/.test(txt)?"Μισθός":"Άλλα έσοδα",why:"kw"};
 for(var i=0;i<KW.length;i++)if(KW[i][1].test(txt))return{c:KW[i][0],why:"kw"};
