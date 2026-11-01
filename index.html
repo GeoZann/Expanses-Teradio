@@ -264,7 +264,10 @@ BANKS.forEach(function(k){var o=S.acc[k];if(o){tot+=o.b;any=true}
 rows+='<div class="bud"><div><div class="lbl"><span>'+esc(k)+'</span><b class="num">'+(o?eur(o.b):"—")+'</b></div><small style="color:var(--mut)">'+(o?"στις "+dt(o.d):"Δεν υπάρχει ακόμα υπόλοιπο")+'</small></div><input type="number" step="0.01" data-acc="'+esc(k)+'" placeholder="Υπόλοιπο €" aria-label="Υπόλοιπο '+esc(k)+'"></div>'});
 if(cash!==null){tot+=cash;any=true}
 rows+='<div class="bud"><div><div class="lbl"><span>Μετρητά</span><b class="num">'+(cash===null?"—":eur(cash))+'</b></div><small style="color:var(--mut)">'+(cash===null?"Γράψε πόσα μετρητά έχεις τώρα":S.cash?"από "+dt(S.cash.d)+": + αναλήψεις − έξοδα με μετρητά":"αναλήψεις − έξοδα με μετρητά, με αρχή το 0. Γράψε πόσα έχεις τώρα για ακριβές ποσό")+'</small></div><input type="number" step="0.01" min="0" data-acc="cash" placeholder="Τώρα έχω €" aria-label="Μετρητά τώρα"></div>';
-return'<section><h2>Συνολικά χρήματα</h2><div class="bal num'+(tot<0?" neg":"")+'">'+(any?eur(tot):"—")+"</div>"+rows+
+// Χωρίς τον μισθό: το σύνολο μείον ολόκληρο τον τελευταίο μισθό (όχι όσα έχουν μείνει από αυτόν).
+var L=cycles(),sal=L[L.length-1],keep="";
+if(any&&sal)keep='<div class="sum" style="margin:-4px 0 16px"><div class="lbl"><span>Χωρίς τον μισθό</span><b class="num'+(tot-sal.a<0?" neg":"")+'">'+eur(tot-sal.a)+'</b></div></div><p class="hint" style="margin:-8px 0 16px">Σύνολο μείον τον μισθό της '+dt(sal.s)+" ("+eur(sal.a)+").</p>";
+return'<section><h2>Συνολικά χρήματα</h2><div class="bal num'+(tot<0?" neg":"")+'">'+(any?eur(tot):"—")+"</div>"+keep+rows+
 '<small style="color:var(--mut)">Τα υπόλοιπα των τραπεζών ενημερώνονται μόνα τους από τα αρχεία λογαριασμού. Αν θέλεις, γράψε ένα ποσό για να τα διορθώσεις με το χέρι.</small></section>'
 }
 function importView(){

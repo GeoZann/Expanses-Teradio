@@ -1,4 +1,4 @@
-const CACHE = "tetradio-v14";
+const CACHE = "tetradio-v15";
 // Εκτός από τα δικά μας αρχεία, κρατάμε για offline μόνο βιβλιοθήκες και γραμματοσειρές.
 // Οι κλήσεις του Firebase (googleapis.com) περνούν απευθείας, γιατί είναι ροές δεδομένων.
 const CDN = ["www.gstatic.com", "cdn.jsdelivr.net", "fonts.googleapis.com", "fonts.gstatic.com"];

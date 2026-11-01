@@ -1,6 +1,6 @@
 // Συγχρονισμός με Firebase: login με Google και αποθήκευση στο Firestore.
 // Δομή: users/{uid}/tx/{id} μία κίνηση ανά έγγραφο, users/{uid}/meta/settings {bud, rules, ign}.
-// Το index.html καλεί CL.push() σε κάθε save(). Εδώ βρίσκουμε τι άλλαξε και γράφουμε μόνο αυτό.
+// Το index.html καλεί CL.push() σε κάθε save(). Εδώ βρίσκουμε τι άλλαξε (νέες, αλλαγμένες, σβησμένες κινήσεις) και γράφουμε μόνο αυτό.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
@@ -18,8 +18,10 @@ const auth = getAuth(app);
 const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 
 const CL = window.CL = { user: null, ready: false, err: "" };
-let have = new Set(), meta = "", unsub = [];
+let have = new Map(), meta = "", unsub = [];
 const clean = (o) => JSON.parse(JSON.stringify(o));
+// Υπογραφή μιας κίνησης με ταξινομημένα πεδία: το Firestore δεν κρατά τη σειρά τους.
+const sig = (t) => { const o = clean(t); return JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]])) };
 const metaOf = (s) => JSON.stringify({ bud: s.bud || {}, rules: s.rules || {}, ign: s.ign || [], acc: s.acc || {}, cash: s.cash || null });
 
 CL.signIn = async () => {
@@ -41,8 +43,8 @@ CL.push = async () => {
   if (!CL.ready) { S.tx.forEach((t) => { if (!have.has(t.id) && !queued.some((q) => q.id === t.id)) queued.push(t) }); return }
   const base = "users/" + CL.user.uid, ops = [];
   const ids = new Set(S.tx.map((t) => t.id));
-  S.tx.forEach((t) => { if (!have.has(t.id)) { have.add(t.id); ops.push({ id: t.id, f: (b) => b.set(doc(db, base + "/tx/" + t.id), clean(t)) }) } });
-  [...have].forEach((id) => { if (!ids.has(id)) { have.delete(id); ops.push({ f: (b) => b.delete(doc(db, base + "/tx/" + id)) }) } });
+  S.tx.forEach((t) => { const g = sig(t); if (have.get(t.id) !== g) { have.set(t.id, g); ops.push({ id: t.id, f: (b) => b.set(doc(db, base + "/tx/" + t.id), clean(t)) }) } });
+  [...have.keys()].forEach((id) => { if (!ids.has(id)) { have.delete(id); ops.push({ f: (b) => b.delete(doc(db, base + "/tx/" + id)) }) } });
   const m = metaOf(S);
   if (m !== meta) { meta = m; ops.push({ meta: 1, f: (b) => b.set(doc(db, base + "/meta/settings"), JSON.parse(m)) }) }
   // Ένα batch δέχεται έως 500 εγγραφές. Αν αποτύχει, ξεχνάμε ότι το στείλαμε, για να ξαναδοκιμάσει στην επόμενη αλλαγή.
@@ -88,7 +90,7 @@ onAuthStateChanged(auth, (u) => {
     const first = !CL.ready;
     CL.ready = true; cache();
     if (first && queued.length) { queued.forEach((t) => { if (!S.tx.some((x) => x.id === t.id)) S.tx.push(t) }); queued = []; CL.push() }
-    const key = [...have].sort().join() + meta;
+    const key = [...have.values()].sort().join() + meta;
     if (key !== shown) { shown = key; render() }
   };
   // Μια άδεια απάντηση από την cache δεν σημαίνει άδειο λογαριασμό: περιμένουμε τον server.
@@ -97,8 +99,8 @@ onAuthStateChanged(auth, (u) => {
   const live = { includeMetadataChanges: true };
   unsub.push(onSnapshot(collection(db, base + "/tx"), live, (q) => {
     if (q.empty && q.metadata.fromCache) return;
-    have = new Set(q.docs.map((d) => d.id));
     S.tx = q.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+    have = new Map(S.tx.map((t) => [t.id, sig(t)]));
     gotTx = true; done();
   }, (e) => { CL.err = "Σφάλμα συγχρονισμού: " + e.code; render() }));
   unsub.push(onSnapshot(doc(db, base + "/meta/settings"), live, (d) => {
