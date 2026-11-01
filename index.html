@@ -102,7 +102,7 @@ footer .hint button{padding:4px 10px!important;font-size:.82rem}
 <nav role="tablist">
 <button role="tab" data-t="s" aria-selected="true">Σύνοψη</button>
 <button role="tab" data-t="k" aria-selected="false">Κινήσεις</button>
-<button role="tab" data-t="b" aria-selected="false">Budget</button>
+<button role="tab" data-t="b" aria-selected="false">Μισθός</button>
 <button role="tab" data-t="x" aria-selected="false">Χρήματα</button>
 </nav>
 <div id="v"></div>
@@ -158,11 +158,59 @@ D.L.forEach(function(t){var sg=t.k==="i"?"+":t.k==="e"?"−":"";
 h+='<div class="tx"><div>'+esc(t.c)+"<small>"+t.d.split("-").reverse().join("/")+(t.n?" · "+esc(t.n):"")+(t.src?" · "+esc(t.src):"")+(t.cash&&t.k!=="t"?" · μετρητά":"")+'</small></div><div><b class="num '+(t.k==="i"?"pos":t.k==="e"?"neg":"")+'">'+sg+eur(t.a)+'</b> <button data-del="'+t.id+'" aria-label="Διαγραφή">×</button></div></div>'});
 return h+"</section>"
 }
-function budget(D){
-var h='<section><h2>Μηνιαίο budget ανά κατηγορία</h2>';
-EXP.forEach(function(c){var b=S.bud[c]||0,v=D.by[c]||0,pc=b?Math.min(v/b*100,100):0,over=b&&v>b;
-h+='<div class="bud"><div><div class="lbl"><span>'+esc(c)+'</span><span class="num '+(over?"neg":"")+'">'+eur(v)+(b?" / "+eur(b):"")+'</span></div><div class="bar"><i style="width:'+pc+"%;background:"+(over?"var(--acc)":"var(--pos)")+'"></i></div></div><input type="number" min="0" step="10" data-b="'+esc(c)+'" value="'+(b||"")+'" placeholder="Budget €" aria-label="Budget '+esc(c)+'"></div>'});
-return h+'<small style="color:var(--mut)">Το budget ισχύει για κάθε μήνα. Με κόκκινο φαίνονται οι κατηγορίες που το ξεπέρασαν.</small></section>'
+// Μισθός: κάθε κύκλος ξεκινά με τον μισθό ενός μήνα και τελειώνει την ημέρα πριν τον επόμενο.
+// Ξοδεμένα = έξοδα με κάρτα/τράπεζα + αναλήψεις. Τα έξοδα με μετρητά δεν μετράνε ξανά, γιατί βγήκαν από τις αναλήψεις.
+function cycles(){
+var by={},L=[];
+S.tx.forEach(function(t){if(t.k!=="i"||t.c!=="Μισθός")return;var k=t.d.slice(0,7),o=by[k];
+if(!o){o=by[k]={s:t.d,a:0};L.push(o)}o.a+=t.a;if(t.d<o.s)o.s=t.d});
+L.sort(function(x,y){return x.s<y.s?-1:1});
+L.forEach(function(c,i){c.e=L[i+1]?L[i+1].s:"";c.a=Math.round(c.a*100)/100;
+var hi=c.e||"9999";c.by={};c.sp=0;c.wd=0;c.oth=0;c.cs=0;
+S.tx.forEach(function(t){if(t.d<c.s||t.d>=hi)return;
+if(t.k==="e"){if(t.cash<0)c.cs+=t.a;else{c.sp+=t.a;c.by[t.c]=(c.by[t.c]||0)+t.a}}
+else if(t.k==="t"&&t.cash>0)c.wd+=t.a;
+else if(t.k==="i"&&t.c!=="Μισθός")c.oth+=t.a});
+c.used=c.sp+c.wd});
+return L
+}
+function day(s){var p=s.split("-");return Date.UTC(+p[0],+p[1]-1,+p[2])/864e5}
+function pay(){
+var L=cycles(),i=-1;
+L.forEach(function(c,j){if(c.s.slice(0,7)<=m)i=j});
+if(i<0)return'<section><div class="empty">'+(L.length?"Δεν υπάρχει μισθός μέχρι αυτόν τον μήνα.":"Δεν βρέθηκε μισθός. Δώσε σε ένα έσοδο την κατηγορία «Μισθός» και εδώ θα βλέπεις πόσο έχεις ξοδέψει από αυτόν.")+"</div></section>";
+var c=L[i],td=new Date(),now=td.getFullYear()+"-"+String(td.getMonth()+1).padStart(2,"0")+"-"+String(td.getDate()).padStart(2,"0");
+function dt(d){return d.split("-").reverse().join("/")}
+// Χωρίς επόμενο μισθό υποθέτουμε ότι έρχεται την ίδια ημέρα του επόμενου μήνα.
+var nx=c.e;if(!nx){var p=c.s.split("-"),x=new Date(+p[0],+p[1],+p[2]);nx=x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0")}
+var tot=day(nx)-day(c.s),el=Math.min(Math.max(day(now)-day(c.s)+1,0),tot),live=!c.e&&now<nx;
+var left=c.a-c.used,pc=c.a?c.used/c.a*100:0,tick=el/tot*100;
+var h='<section><small style="color:var(--mut)">Μένουν από τον μισθό της '+dt(c.s)+"</small>"+
+'<div class="bal num'+(left<0?" neg":"")+'" style="margin:4px 0 12px">'+eur(left)+"</div>"+
+'<div class="bar" style="height:10px;border-radius:5px;position:relative;overflow:visible"><i style="width:'+Math.min(pc,100)+"%;border-radius:5px;background:"+(pc>100?"var(--acc)":live&&pc>tick+5?"#f59e0b":"var(--pri)")+'"></i>'+
+(live?'<span title="Πού θα έπρεπε να είσαι σήμερα" style="position:absolute;top:-3px;bottom:-3px;width:2px;border-radius:1px;background:var(--ink);opacity:.5;left:'+tick+'%"></span>':"")+"</div>"+
+'<div class="lbl" style="color:var(--mut);font-size:.84rem;margin-bottom:14px"><span>Ξόδεψες '+Math.round(pc)+"%</span><span>"+(live?"ημέρα "+el+" από "+tot:c.e?"έως "+dt(L[i+1].s):"")+"</span></div>"+
+'<div class="row2"><div><small>Μισθός</small><b class="num">'+eur(c.a)+'</b></div><div><small>Ξοδεύτηκαν</small><b class="num neg">'+eur(c.used)+"</b></div></div>";
+if(live&&left>0)h+='<p class="hint" style="margin:12px 0 0">Μπορείς να ξοδεύεις περίπου <b class="num">'+eur(left/(tot-el+1))+"</b> την ημέρα μέχρι τον επόμενο μισθό ("+dt(nx)+").</p>";
+h+="</section>";
+var cs=Object.keys(c.by).sort(function(x,y){return c.by[y]-c.by[x]});
+if(c.wd)cs.push("Αναλήψεις μετρητών");
+h+="<section><h2>Πού πήγε</h2><p class=\"hint\">Ποσοστό του μισθού ανά κατηγορία.</p>";
+if(!cs.length)h+='<div class="empty">Δεν υπάρχουν έξοδα ακόμα.</div>';
+cs.forEach(function(k){var v=k==="Αναλήψεις μετρητών"?c.wd:c.by[k],q=c.used?v/c.used*100:0,col=k==="Αναλήψεις μετρητών"?"var(--mut)":COL[EXP.indexOf(k)%COL.length]||COL[8];
+h+='<div class="lbl"><span>'+esc(k)+'</span><b class="num">'+eur(v)+' <span style="color:var(--mut);font-weight:500">'+Math.round(c.a?v/c.a*100:0)+'%</span></b></div><div class="bar"><i style="width:'+q+"%;background:"+col+'"></i></div>'});
+var notes=[];
+if(c.cs)notes.push("Τα "+eur(c.cs)+" που πλήρωσες με μετρητά περιέχονται στις αναλήψεις.");
+if(c.oth)notes.push("Είχες και "+eur(c.oth)+" άλλα έσοδα, που δεν προστίθενται στον μισθό.");
+if(notes.length)h+='<p class="hint" style="margin:4px 0 0">'+notes.join(" ")+"</p>";
+h+="</section>";
+// Ιστορικό: οι προηγούμενοι κύκλοι για σύγκριση.
+var past=L.slice(Math.max(0,i-5),i+1).reverse();
+if(past.length>1){h+="<section><h2>Προηγούμενοι μισθοί</h2>";
+past.forEach(function(o){var q=o.a?o.used/o.a*100:0;
+h+='<div class="lbl"><span>'+dt(o.s).slice(0,5)+'</span><b class="num'+(q>100?" neg":"")+'">'+eur(o.used)+" / "+eur(o.a)+' <span style="color:var(--mut);font-weight:500">'+Math.round(q)+'%</span></b></div><div class="bar"><i style="width:'+Math.min(q,100)+"%;background:"+(q>100?"var(--acc)":"var(--pri)")+'"></i></div>'});
+h+="</section>"}
+return h
 }
 // Μετρητά: το ποσό που δήλωσες (S.cash) συν τις αναλήψεις, μείον τα έξοδα με μετρητά που έγιναν μετά.
 function cashNow(){
@@ -258,7 +306,7 @@ document.querySelectorAll("nav button").forEach(function(x){x.setAttribute("aria
 var v=document.getElementById("v");
 document.querySelector("nav").hidden=!!imp;
 if(imp){v.innerHTML=importView();wireImport(v);return}
-v.innerHTML=tab==="s"?summary(D):tab==="k"?list(D):tab==="x"?money():budget(D);
+v.innerHTML=tab==="s"?summary(D):tab==="k"?list(D):tab==="x"?money():pay();
 if(tab==="x")v.querySelectorAll("[data-acc]").forEach(function(x){x.onchange=function(){
 var n=parseFloat(x.value),td=new Date(),d=td.getFullYear()+"-"+String(td.getMonth()+1).padStart(2,"0")+"-"+String(td.getDate()).padStart(2,"0");
 if(isNaN(n))return;
@@ -282,7 +330,6 @@ ff.onchange=function(){if(ff.files.length)startImport([].slice.call(ff.files))};
 // Μια εισαγμένη κίνηση που σβήνεις δεν ξαναμπαίνει σε επόμενη εισαγωγή.
 v.querySelectorAll("[data-del]").forEach(function(x){x.onclick=function(){S.tx=S.tx.filter(function(t){if(t.id===x.dataset.del&&t.uid)S.ign.push(t.uid);return t.id!==x.dataset.del});save();render()}})
 }
-if(tab==="b")v.querySelectorAll("[data-b]").forEach(function(x){x.onchange=function(){var n=parseFloat(x.value);if(n>0)S.bud[x.dataset.b]=n;else delete S.bud[x.dataset.b];save();render()}})
 }
 document.getElementById("pv").onclick=function(){shift(-1)};
 document.getElementById("nx").onclick=function(){shift(1)};
