@@ -64,7 +64,17 @@ input::placeholder{color:var(--mut)}
 .tx{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:11px 0;border-bottom:1px solid var(--line)}
 .tx:last-child,.it:last-of-type{border-bottom:0}
 .tx>div:first-child{font-weight:500;min-width:0}
-.cat{width:auto;field-sizing:content;max-width:100%;min-height:0;padding:0 18px 0 0;border:0;background:transparent;font-weight:500;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--mut) 50%),linear-gradient(135deg,var(--mut) 50%,transparent 50%);background-position:right 7px center,right 3px center;background-size:4px 4px;background-repeat:no-repeat}
+.tt{overflow-wrap:anywhere}
+.sum{background:var(--soft);border-radius:12px;padding:4px 12px}
+.sum .lbl{padding:7px 0;border-bottom:1px solid var(--line)}
+.sum .lbl:last-child{border-bottom:0;font-weight:600}
+.meta{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;margin-top:4px}
+.tx .meta small{display:inline}
+.chip{position:relative;display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 8px;border-radius:999px;background:color-mix(in srgb,var(--c) 14%,transparent);font-size:.76rem;font-weight:600;line-height:1.4;white-space:nowrap}
+.chip i{width:7px;height:7px;border-radius:50%;background:var(--c);flex:none}
+.chip svg{width:9px;height:6px;color:var(--mut)}
+.chip select{position:absolute;inset:0;width:100%;height:100%;min-height:0;padding:0;border:0;opacity:0;cursor:pointer}
+.chip:has(select:focus-visible){outline:2px solid var(--pri);outline-offset:2px}
 .tx small{color:var(--mut);display:block;font-weight:400;font-size:.8rem;overflow-wrap:anywhere}
 .tx>div:last-child{display:flex;align-items:center;gap:8px;white-space:nowrap}
 .tx b{font-weight:600}
@@ -146,6 +156,14 @@ cs.forEach(function(c){var v=D.by[c],pc=v/D.exp*100,col=COL[EXP.indexOf(c)%COL.l
 h+='<div class="lbl"><span>'+esc(c)+'</span><b class="num">'+eur(v)+" ("+Math.round(pc)+"%)</b></div><div class=\"bar\"><i style=\"width:"+pc+"%;background:"+col+'"></i></div>'});
 return h+"</section>"
 }
+// Κατηγορία ως «χάπι» με το χρώμα της. Πατώντας το ανοίγει η λίστα κατηγοριών.
+function chip(t){
+var col=t.k==="t"?"var(--mut)":t.k==="i"?(t.c==="Μισθός"?"var(--pos)":"#14b8a6"):COL[EXP.indexOf(t.c)%COL.length]||COL[8];
+var h='<span class="chip" style="--c:'+col+'"><i></i>'+esc(t.c);
+if(t.k!=="t")h+='<svg viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'+
+'<select data-cat="'+t.id+'" aria-label="Κατηγορία">'+(t.k==="i"?INC:EXP).concat(t.k==="i"||EXP.indexOf(t.c)>=0?[]:[t.c]).map(function(c){return"<option"+(c===t.c?" selected":"")+">"+esc(c)+"</option>"}).join("")+"</select>";
+return h+"</span>"
+}
 function list(D){
 var h='<section><h2>Εισαγωγή από τράπεζα</h2><p class="hint">Αρχείο κινήσεων από Alpha, Πειραιώς ή Revolut (CSV ή Excel). Στο κινητό μπορείς και να το κοινοποιήσεις κατευθείαν στο Τετράδιο.</p>'+
 '<input type="file" id="ff" multiple accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden><button type="button" id="fb" style="width:100%">Επιλογή αρχείου</button></section>';
@@ -156,11 +174,12 @@ h+='<section><h2>Νέα κίνηση</h2><form id="f"><select id="fk" aria-label
 h+="<section><h2>Κινήσεις μήνα</h2>";
 if(!D.L.length)h+='<div class="empty">Καμία κίνηση ακόμα.</div>';
 D.L.forEach(function(t){var sg=t.k==="i"?"+":t.k==="e"?"−":"";
-h+='<div class="tx"><div>'+(t.k==="t"?esc(t.c):'<select class="cat" data-cat="'+t.id+'" aria-label="Κατηγορία">'+(t.k==="i"?INC:EXP).concat(t.k==="i"||EXP.indexOf(t.c)>=0?[]:[t.c]).map(function(c){return"<option"+(c===t.c?" selected":"")+">"+esc(c)+"</option>"}).join("")+"</select>")+"<small>"+t.d.split("-").reverse().join("/")+(t.n?" · "+esc(t.n):"")+(t.src?" · "+esc(t.src):"")+(t.cash&&t.k!=="t"?" · μετρητά":"")+'</small></div><div><b class="num '+(t.k==="i"?"pos":t.k==="e"?"neg":"")+'">'+sg+eur(t.a)+'</b> <button data-del="'+t.id+'" aria-label="Διαγραφή">×</button></div></div>'});
+h+='<div class="tx"><div><div class="tt">'+esc(t.n||t.c)+'</div><div class="meta">'+chip(t)+"<small>"+t.d.split("-").reverse().join("/")+(t.src?" · "+esc(t.src):"")+(t.cash&&t.k!=="t"?" · μετρητά":"")+'</small></div></div><div><b class="num '+(t.k==="i"?"pos":t.k==="e"?"neg":"")+'">'+sg+eur(t.a)+'</b> <button data-del="'+t.id+'" aria-label="Διαγραφή">×</button></div></div>'});
 return h+"</section>"
 }
 // Μισθός: κάθε κύκλος ξεκινά με τον μισθό ενός μήνα και τελειώνει την ημέρα πριν τον επόμενο.
-// Ξοδεμένα = έξοδα με κάρτα/τράπεζα + αναλήψεις. Τα έξοδα με μετρητά δεν μετράνε ξανά, γιατί βγήκαν από τις αναλήψεις.
+// Ξοδεμένα = έξοδα με κάρτα/τράπεζα + αναλήψεις − άλλα έσοδα (π.χ. μερίδια λογαριασμών που σου επέστρεψαν).
+// Τα έξοδα και έσοδα με μετρητά δεν μετράνε ξανά, γιατί περνούν από τις αναλήψεις.
 function cycles(){
 var by={},L=[];
 S.tx.forEach(function(t){if(t.k!=="i"||t.c!=="Μισθός")return;var k=t.d.slice(0,7),o=by[k];
@@ -171,8 +190,8 @@ var hi=c.e||"9999";c.by={};c.sp=0;c.wd=0;c.oth=0;c.cs=0;
 S.tx.forEach(function(t){if(t.d<c.s||t.d>=hi)return;
 if(t.k==="e"){if(t.cash<0)c.cs+=t.a;else{c.sp+=t.a;c.by[t.c]=(c.by[t.c]||0)+t.a}}
 else if(t.k==="t"&&t.cash>0)c.wd+=t.a;
-else if(t.k==="i"&&t.c!=="Μισθός")c.oth+=t.a});
-c.used=c.sp+c.wd});
+else if(t.k==="i"&&t.c!=="Μισθός"&&!(t.cash>0))c.oth+=t.a});
+c.out=c.sp+c.wd;c.used=c.out-c.oth});
 return L
 }
 // Αλλαγή κατηγορίας σε αποθηκευμένη κίνηση: περνά και στις άλλες κινήσεις του ίδιου εμπόρου
@@ -207,18 +226,18 @@ var h='<section><small style="color:var(--mut)">Μένουν από τον μι�
 '<div class="bar" style="height:10px;border-radius:5px;position:relative;overflow:visible"><i style="width:'+Math.min(pc,100)+"%;border-radius:5px;background:"+(pc>100?"var(--acc)":live&&pc>tick+5?"#f59e0b":"var(--pri)")+'"></i>'+
 (live?'<span title="Πού θα έπρεπε να είσαι σήμερα" style="position:absolute;top:-3px;bottom:-3px;width:2px;border-radius:1px;background:var(--ink);opacity:.5;left:'+tick+'%"></span>':"")+"</div>"+
 '<div class="lbl" style="color:var(--mut);font-size:.84rem;margin-bottom:14px"><span>Ξόδεψες '+Math.round(pc)+"%</span><span>"+(live?"ημέρα "+el+" από "+tot:c.e?"έως "+dt(L[i+1].s):"")+"</span></div>"+
-'<div class="row2"><div><small>Μισθός</small><b class="num">'+eur(c.a)+'</b></div><div><small>Ξοδεύτηκαν</small><b class="num neg">'+eur(c.used)+"</b></div></div>";
+'<div class="sum"><div class="lbl"><span>Μισθός</span><b class="num">'+eur(c.a)+"</b></div>"+(c.oth?'<div class="lbl"><span>Άλλα έσοδα</span><b class="num pos">+'+eur(c.oth)+"</b></div>":"")+'<div class="lbl"><span>Έξοδα</span><b class="num neg">−'+eur(c.out)+'</b></div><div class="lbl"><span>Μένουν</span><b class="num'+(left<0?" neg":"")+'">'+eur(left)+"</b></div></div>";
 if(live&&left>0)h+='<p class="hint" style="margin:12px 0 0">Μπορείς να ξοδεύεις περίπου <b class="num">'+eur(left/(tot-el+1))+"</b> την ημέρα μέχρι τον επόμενο μισθό ("+dt(nx)+").</p>";
 h+="</section>";
 var cs=Object.keys(c.by).sort(function(x,y){return c.by[y]-c.by[x]});
 if(c.wd)cs.push("Αναλήψεις μετρητών");
-h+="<section><h2>Πού πήγε</h2><p class=\"hint\">Ποσοστό του μισθού ανά κατηγορία.</p>";
+h+="<section><h2>Πού πήγε</h2><p class=\"hint\">Έξοδα ανά κατηγορία, ως ποσοστό του μισθού.</p>";
 if(!cs.length)h+='<div class="empty">Δεν υπάρχουν έξοδα ακόμα.</div>';
-cs.forEach(function(k){var v=k==="Αναλήψεις μετρητών"?c.wd:c.by[k],q=c.used?v/c.used*100:0,col=k==="Αναλήψεις μετρητών"?"var(--mut)":COL[EXP.indexOf(k)%COL.length]||COL[8];
+cs.forEach(function(k){var v=k==="Αναλήψεις μετρητών"?c.wd:c.by[k],q=c.out?v/c.out*100:0,col=k==="Αναλήψεις μετρητών"?"var(--mut)":COL[EXP.indexOf(k)%COL.length]||COL[8];
 h+='<div class="lbl"><span>'+esc(k)+'</span><b class="num">'+eur(v)+' <span style="color:var(--mut);font-weight:500">'+Math.round(c.a?v/c.a*100:0)+'%</span></b></div><div class="bar"><i style="width:'+q+"%;background:"+col+'"></i></div>'});
 var notes=[];
 if(c.cs)notes.push("Τα "+eur(c.cs)+" που πλήρωσες με μετρητά περιέχονται στις αναλήψεις.");
-if(c.oth)notes.push("Είχες και "+eur(c.oth)+" άλλα έσοδα, που δεν προστίθενται στον μισθό.");
+if(c.oth)notes.push("Τα "+eur(c.oth)+" που σου ήρθαν από άλλα έσοδα (π.χ. μερίδια λογαριασμών) αφαιρούνται από τα έξοδα.");
 if(notes.length)h+='<p class="hint" style="margin:4px 0 0">'+notes.join(" ")+"</p>";
 h+="</section>";
 // Ιστορικό: οι προηγούμενοι κύκλοι για σύγκριση.
